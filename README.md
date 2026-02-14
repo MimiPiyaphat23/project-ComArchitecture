@@ -38,3 +38,15 @@ The simulator allows users to:
 ---
 
 ## 🏗 Project Structure
+
+---
+
+## ⚙️ Installation
+
+Make sure you have Python 3.9+ installed.
+
+Install required packages:
+
+```bash
+pip install streamlit pandas
+
