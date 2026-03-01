@@ -1,5 +1,3 @@
-# core/alu.py
-
 def execute_alu(instr, rs_val, rt_val):
 
     # Safety check
@@ -25,7 +23,6 @@ def execute_alu(instr, rs_val, rt_val):
         return rs_val - rt_val
 
     # Memory address calculation
-    # ใช้กับ LW และ SW
     # effective address = base(rs) + immediate
     if op in ["LW", "SW"]:
         # ตรวจว่า immediate มีจริง

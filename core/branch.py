@@ -1,5 +1,3 @@
-# core/branch_unit.py
-
 def is_branch_taken(instr, alu_result):
 
     # ถ้าไม่มี instruction → ไม่ branch
