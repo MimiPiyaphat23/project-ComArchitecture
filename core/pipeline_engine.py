@@ -7,8 +7,11 @@ class Pipeline:
     def __init__(self, instructions, forwarding_enabled=False):
         self.instructions = instructions
         self.forwarding_enabled = forwarding_enabled
+
         self.stages = ["IF", "ID", "EX", "MEM", "WB"]
         self.timeline = []
+
+        # state จริง
         self.registers = [0] * 32
         self.memory = [0] * 1024
 
@@ -16,103 +19,69 @@ class Pipeline:
         pc = 0
         cycle = 0
 
-        self.IF_ID = None
-        self.ID_EX = None
-        self.EX_MEM = None
-        self.MEM_WB = None
+        # pipeline registers
+        IF = ID = EX = MEM = WB = None
 
         active = True
 
         while active:
             cycle += 1
 
-            # ---------------- WB ----------------
-            if self.MEM_WB and self.MEM_WB["RegWrite"]:
-                write_data = (
-                    self.MEM_WB["mem_data"]
-                    if self.MEM_WB["MemToReg"]
-                    else self.MEM_WB["alu_result"]
-                )
-                self.registers[self.MEM_WB["dest"]] = write_data
+            # ---------------- WRITE BACK ----------------
+            if WB:
+                instr = WB
+                if instr.opcode in ["ADD", "SUB"]:
+                    self.registers[instr.rd] = instr.result
 
-            # ---------------- MEM ----------------
-            new_MEM_WB = None
-            if self.EX_MEM:
-                mem_data = None
+                elif instr.opcode == "LW":
+                    self.registers[instr.rt] = instr.result
 
-                if self.EX_MEM["MemRead"]:
-                    mem_data = self.memory[self.EX_MEM["alu_result"]]
+            # ---------------- MEMORY ----------------
+            if MEM:
+                instr = MEM
 
-                if self.EX_MEM["MemWrite"]:
-                    self.memory[self.EX_MEM["alu_result"]] = self.EX_MEM["write_data"]
+                if instr.opcode == "LW":
+                    instr.result = self.memory[instr.result]
 
-                new_MEM_WB = {
-                    "instr": self.EX_MEM["instr"],
-                    "alu_result": self.EX_MEM["alu_result"],
-                    "mem_data": mem_data,
-                    "dest": self.EX_MEM["dest"],
-                    "RegWrite": self.EX_MEM["RegWrite"],
-                    "MemToReg": self.EX_MEM["MemToReg"],
-                }
+                elif instr.opcode == "SW":
+                    self.memory[instr.result] = self.registers[instr.rt]
 
-            # ---------------- EX ----------------
-            new_EX_MEM = None
-
-            if self.ID_EX:
-                instr = self.ID_EX["instr"]
-                rs_val = self.ID_EX["rs_val"]
-                rt_val = self.ID_EX["rt_val"]
-
-                # เรียก ALU
-                alu_result = execute_alu(instr, rs_val, rt_val)
-
-                branch_taken = False
-                if instr.opcode == "BEQ":
-                    branch_taken = (alu_result == 0)
-
-                new_EX_MEM = {
-                    "instr": instr,
-                    "alu_result": alu_result,
-                    "write_data": rt_val,
-                    "dest": instr.rd if instr.type == "R" else instr.rt,
-                    "MemRead": instr.opcode == "LW",
-                    "MemWrite": instr.opcode == "SW",
-                    "RegWrite": instr.opcode in ["ADD", "SUB", "LW"],
-                    "MemToReg": instr.opcode == "LW",
-                    "branch_taken": branch_taken,
-                }
-
-            # ---------------- ID ----------------
-            new_ID_EX = None
-            if self.IF_ID:
-                instr = self.IF_ID
+            # ---------------- EXECUTE ----------------
+            if EX:
+                instr = EX
                 rs_val = self.registers[instr.rs] if instr.rs is not None else 0
                 rt_val = self.registers[instr.rt] if instr.rt is not None else 0
 
-                new_ID_EX = {
-                    "instr": instr,
-                    "rs_val": rs_val,
-                    "rt_val": rt_val,
-                }
+                alu_result = execute_alu(instr, rs_val, rt_val)
+                instr.result = alu_result
 
-            # ---------------- IF ----------------
-            new_IF_ID = None
+            # ---------------- SHIFT PIPELINE ----------------
+            WB = MEM
+            MEM = EX
+            EX = ID
+            ID = IF
+
+            # ---------------- FETCH ----------------
             if pc < len(self.instructions):
-                new_IF_ID = self.instructions[pc]
+                IF = self.instructions[pc]
                 pc += 1
+            else:
+                IF = None
 
-            # -------- Update pipeline registers --------
-            self.MEM_WB = new_MEM_WB
-            self.EX_MEM = new_EX_MEM
-            self.ID_EX = new_ID_EX
-            self.IF_ID = new_IF_ID
+            # ---------------- RECORD TIMELINE ----------------
+            row = {"Cycle": cycle}
+            for stage in self.stages:
+                row[stage] = ""
+
+            if IF: row["IF"] = IF.raw
+            if ID: row["ID"] = ID.raw
+            if EX: row["EX"] = EX.raw
+            if MEM: row["MEM"] = MEM.raw
+            if WB: row["WB"] = WB.raw
+
+            self.timeline.append(row)
 
             # stop condition
-            active = any([
-                self.IF_ID,
-                self.ID_EX,
-                self.EX_MEM,
-                self.MEM_WB
-            ]) or pc < len(self.instructions)
+            active = any([IF, ID, EX, MEM, WB]) or pc < len(self.instructions)
 
-        return self.registers
+        return self.timeline
