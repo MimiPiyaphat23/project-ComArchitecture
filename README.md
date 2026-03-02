@@ -160,7 +160,7 @@ Example:
 
 ```bash
 # Install dependencies
-python -m pip install -r requirements.txt
+python -m pip install streamlit
 
 # Run application
 python -m streamlit run app.py
