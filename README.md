@@ -160,8 +160,8 @@ Example:
 
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 # Run application
-streamlit run app.py
+python -m streamlit run app.py
 
