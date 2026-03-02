@@ -1,35 +1,39 @@
-from hazard.hazard_detection import check_hazard
-from hazard.forwarding_unit import apply_forwarding
 from core.alu import execute_alu
+from core.branch import is_branch_taken
 
 
 class Pipeline:
-    def __init__(self, instructions, forwarding_enabled=False):
+
+    def __init__(self, instructions):
+
         self.instructions = instructions
-        self.forwarding_enabled = forwarding_enabled
 
         self.stages = ["IF", "ID", "EX", "MEM", "WB"]
+
         self.timeline = []
 
-        # state จริง
         self.registers = [0] * 32
         self.memory = [0] * 1024
 
     def run(self):
+
         pc = 0
         cycle = 0
 
-        # pipeline registers
         IF = ID = EX = MEM = WB = None
 
         active = True
 
         while active:
+
             cycle += 1
 
             # ---------------- WRITE BACK ----------------
+
             if WB:
+
                 instr = WB
+
                 if instr.opcode in ["ADD", "SUB"]:
                     self.registers[instr.rd] = instr.result
 
@@ -37,7 +41,9 @@ class Pipeline:
                     self.registers[instr.rt] = instr.result
 
             # ---------------- MEMORY ----------------
+
             if MEM:
+
                 instr = MEM
 
                 if instr.opcode == "LW":
@@ -47,29 +53,48 @@ class Pipeline:
                     self.memory[instr.result] = self.registers[instr.rt]
 
             # ---------------- EXECUTE ----------------
+
             if EX:
+
                 instr = EX
+
                 rs_val = self.registers[instr.rs] if instr.rs is not None else 0
                 rt_val = self.registers[instr.rt] if instr.rt is not None else 0
 
                 alu_result = execute_alu(instr, rs_val, rt_val)
+
                 instr.result = alu_result
 
-            # ---------------- SHIFT PIPELINE ----------------
+                # -------- branch --------
+
+                if is_branch_taken(instr, alu_result):
+
+                    pc = pc + instr.immediate
+
+                    IF = None
+                    ID = None
+
+            # ---------------- SHIFT ----------------
+
             WB = MEM
             MEM = EX
             EX = ID
             ID = IF
 
             # ---------------- FETCH ----------------
+
             if pc < len(self.instructions):
+
                 IF = self.instructions[pc]
                 pc += 1
+
             else:
                 IF = None
 
-            # ---------------- RECORD TIMELINE ----------------
+            # ---------------- TIMELINE ----------------
+
             row = {"Cycle": cycle}
+
             for stage in self.stages:
                 row[stage] = ""
 
@@ -81,7 +106,6 @@ class Pipeline:
 
             self.timeline.append(row)
 
-            # stop condition
             active = any([IF, ID, EX, MEM, WB]) or pc < len(self.instructions)
 
         return self.timeline
