@@ -1,25 +1,16 @@
-from hazard.hazard_detection import should_stall
+from hazard.hazard_detection import check_hazard
 from hazard.forwarding_unit import apply_forwarding
 
-
 class PipelineControl:
-
     def __init__(self, forwarding_enabled=False):
         self.forwarding_enabled = forwarding_enabled
 
-    def evaluate(self, current_instr, previous_instr):
-        """
-        current_instr  = instruction ที่อยู่ใน ID
-        previous_instr = instruction ที่อยู่ใน EX
-        """
+    def check_stall(self, id_instr, ex_instr):
+        # เช็ค Stall ระหว่าง ID กับ EX
+        return check_hazard(id_instr, ex_instr, self.forwarding_enabled)
 
-        # 1️⃣ ตรวจ stall ก่อน
-        stall = should_stall(current_instr, previous_instr)
-
-        # 2️⃣ ถ้าไม่ stall และเปิด forwarding
-        forward = False
-        if self.forwarding_enabled and not stall:
-            forward = apply_forwarding(current_instr, previous_instr)
-
-        # 3️⃣ คืนผลลัพธ์
-        return stall, forward
+    def check_forward(self, ex_instr, prev_instr):
+        # เช็ค Forward ระหว่าง EX กับ MEM/WB
+        if not self.forwarding_enabled:
+            return False
+        return apply_forwarding(ex_instr, prev_instr)
