@@ -61,7 +61,7 @@ def parse_instructions(text):
 
             # ต้องมี operand 3 ตัว
             if len(parts) != 4:
-                raise ValueError(f"Invalid R-type format: {line}")
+                raise ValueError(f"Invalid R-type format\n{line}")
 
             instr.type = "R"
 
