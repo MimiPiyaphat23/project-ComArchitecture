@@ -18,13 +18,14 @@ mips_registers = {
 
 
 # -----------------------------
-# register validator (รองรับ R และ $)
+# register validator
+# รองรับ R1 และ $t0
 # -----------------------------
 def validate_register(reg):
 
     reg = reg.strip()
 
-    # -------- R format --------
+    # R format
     if re.match(r"^R\d+$", reg):
 
         reg_num = int(reg[1:])
@@ -34,7 +35,7 @@ def validate_register(reg):
 
         return reg_num
 
-    # -------- MIPS format --------
+    # MIPS format
     reg = reg.lower()
 
     if reg in mips_registers:
@@ -118,6 +119,34 @@ def parse_instructions(text):
             instr.rt = validate_register(parts[2])
 
             instr.immediate = 0
+
+        # ---------------- JUMP ----------------
+
+        elif instr.opcode == "J":
+
+            if len(parts) != 2:
+                raise ValueError(f"Invalid J format\n{line}")
+
+            instr.type = "J"
+            instr.immediate = int(parts[1])
+
+
+        elif instr.opcode == "JAL":
+
+            if len(parts) != 2:
+                raise ValueError(f"Invalid JAL format\n{line}")
+
+            instr.type = "J"
+            instr.immediate = int(parts[1])
+
+
+        elif instr.opcode == "JR":
+
+            if len(parts) != 2:
+                raise ValueError(f"Invalid JR format\n{line}")
+
+            instr.type = "J"
+            instr.rs = validate_register(parts[1])
 
         # ---------------- NOP ----------------
 
