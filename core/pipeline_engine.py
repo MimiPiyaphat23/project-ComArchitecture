@@ -11,32 +11,45 @@ class Pipeline:
         self.stages = ["IF", "ID", "EX", "MEM", "WB"]
         self.timeline = []
 
-        # state จริง
+        # register file (32 registers)
         self.registers = [0] * 32
+
+        # memory (1024 words)
         self.memory = [0] * 1024
 
     def run(self):
+
         pc = 0
         cycle = 0
 
         # pipeline registers
-        IF = ID = EX = MEM = WB = None
+        IF = None
+        ID = None
+        EX = None
+        MEM = None
+        WB = None
 
         active = True
 
         while active:
+
             cycle += 1
 
-            # ---------------- WRITE BACK ----------------
+            # ==============================
+            # WRITE BACK
+            # ==============================
             if WB:
                 instr = WB
-                if instr.opcode in ["ADD", "SUB"]:
+
+                if instr.opcode in ["ADD", "SUB", "AND", "OR"]:
                     self.registers[instr.rd] = instr.result
 
                 elif instr.opcode == "LW":
                     self.registers[instr.rt] = instr.result
 
-            # ---------------- MEMORY ----------------
+            # ==============================
+            # MEMORY
+            # ==============================
             if MEM:
                 instr = MEM
 
@@ -46,42 +59,73 @@ class Pipeline:
                 elif instr.opcode == "SW":
                     self.memory[instr.result] = self.registers[instr.rt]
 
-            # ---------------- EXECUTE ----------------
+            # ==============================
+            # EXECUTE
+            # ==============================
             if EX:
                 instr = EX
+
                 rs_val = self.registers[instr.rs] if instr.rs is not None else 0
                 rt_val = self.registers[instr.rt] if instr.rt is not None else 0
 
-                alu_result = execute_alu(instr, rs_val, rt_val)
+                # Forwarding
+                if self.forwarding_enabled:
+                    rs_val, rt_val = apply_forwarding(instr, rs_val, rt_val, MEM, WB)
+
+                # Memory address calculation
+                if instr.opcode in ["LW", "SW"]:
+                    alu_result = rs_val + instr.immediate
+
+                else:
+                    alu_result = execute_alu(instr, rs_val, rt_val)
+
                 instr.result = alu_result
 
-            # ---------------- SHIFT PIPELINE ----------------
+            # ==============================
+            # SHIFT PIPELINE
+            # ==============================
             WB = MEM
             MEM = EX
             EX = ID
             ID = IF
 
-            # ---------------- FETCH ----------------
+            # ==============================
+            # FETCH
+            # ==============================
             if pc < len(self.instructions):
                 IF = self.instructions[pc]
                 pc += 1
             else:
                 IF = None
 
-            # ---------------- RECORD TIMELINE ----------------
+            # ==============================
+            # RECORD TIMELINE
+            # ==============================
             row = {"Cycle": cycle}
+
             for stage in self.stages:
                 row[stage] = ""
 
-            if IF: row["IF"] = IF.raw
-            if ID: row["ID"] = ID.raw
-            if EX: row["EX"] = EX.raw
-            if MEM: row["MEM"] = MEM.raw
-            if WB: row["WB"] = WB.raw
+            if IF:
+                row["IF"] = IF.raw
+
+            if ID:
+                row["ID"] = ID.raw
+
+            if EX:
+                row["EX"] = EX.raw
+
+            if MEM:
+                row["MEM"] = MEM.raw
+
+            if WB:
+                row["WB"] = WB.raw
 
             self.timeline.append(row)
 
-            # stop condition
+            # ==============================
+            # STOP CONDITION
+            # ==============================
             active = any([IF, ID, EX, MEM, WB]) or pc < len(self.instructions)
 
         return self.timeline
