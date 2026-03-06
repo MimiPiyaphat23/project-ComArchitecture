@@ -11,7 +11,7 @@ class Pipeline:
 
         self.control = PipelineControl(self.forwarding_enabled)
 
-        self.stages = ["IF", "ID", "EX", "MEM", "WB"]
+        self.stages = ["IF","ID","EX","MEM","WB"]
         self.timeline = []
 
         self.registers = [0] * 32
@@ -36,10 +36,10 @@ class Pipeline:
 
                 instr = WB
 
-                if instr.opcode in ["ADD", "SUB", "AND", "OR", "XOR", "SLT"]:
+                if instr.opcode in ["ADD","SUB","AND","OR","XOR","SLT"]:
                     self.registers[instr.rd] = instr.result
 
-                elif instr.opcode in ["ADDI", "ANDI", "ORI"]:
+                elif instr.opcode in ["ADDI","ANDI","ORI"]:
                     self.registers[instr.rt] = instr.result
 
                 elif instr.opcode == "LW":
@@ -57,7 +57,7 @@ class Pipeline:
                 elif instr.opcode == "SW":
                     self.memory[instr.result] = self.registers[instr.rt]
 
-            # ---------------- HAZARD CHECK ----------------
+            # ---------------- HAZARD ----------------
 
             is_stalled = False
 
@@ -81,15 +81,13 @@ class Pipeline:
                 rs_val = self.registers[instr.rs] if instr.rs is not None else 0
                 rt_val = self.registers[instr.rt] if instr.rt is not None else 0
 
+                # -------- FORWARDING --------
+
                 if self.forwarding_enabled:
 
-                    # Forwarding จาก MEM
                     if MEM and self.control.check_forward(EX, MEM):
 
-                        if MEM.opcode in ["ADD", "SUB", "AND", "OR", "XOR", "SLT"]:
-                            mem_dest = MEM.rd
-                        else:
-                            mem_dest = MEM.rt
+                        mem_dest = MEM.rd if MEM.opcode in ["ADD","SUB","AND","OR","XOR","SLT"] else MEM.rt
 
                         if instr.rs == mem_dest:
                             rs_val = MEM.result
@@ -97,13 +95,9 @@ class Pipeline:
                         if instr.rt == mem_dest:
                             rt_val = MEM.result
 
-                    # Forwarding จาก WB
                     elif WB and self.control.check_forward(EX, WB):
 
-                        if WB.opcode in ["ADD", "SUB", "AND", "OR", "XOR", "SLT"]:
-                            wb_dest = WB.rd
-                        else:
-                            wb_dest = WB.rt
+                        wb_dest = WB.rd if WB.opcode in ["ADD","SUB","AND","OR","XOR","SLT"] else WB.rt
 
                         if instr.rs == wb_dest:
                             rs_val = WB.result
@@ -111,9 +105,37 @@ class Pipeline:
                         if instr.rt == wb_dest:
                             rt_val = WB.result
 
+                # -------- ALU --------
+
                 alu_result = execute_alu(instr, rs_val, rt_val)
 
                 instr.result = alu_result
+
+                # -------- JUMP LOGIC --------
+
+                if instr.opcode == "J":
+
+                    pc = instr.immediate
+
+                    IF = None
+                    ID = None
+
+                elif instr.opcode == "JAL":
+
+                    # save return address
+                    self.registers[31] = pc
+
+                    pc = instr.immediate
+
+                    IF = None
+                    ID = None
+
+                elif instr.opcode == "JR":
+
+                    pc = self.registers[instr.rs]
+
+                    IF = None
+                    ID = None
 
             # ---------------- PIPELINE SHIFT ----------------
 
@@ -147,7 +169,7 @@ class Pipeline:
 
             self.timeline.append(row)
 
-            active = any([IF, ID, EX, MEM, WB]) or pc < len(self.instructions)
+            active = any([IF,ID,EX,MEM,WB]) or pc < len(self.instructions)
 
             if cycle > 100:
                 break
