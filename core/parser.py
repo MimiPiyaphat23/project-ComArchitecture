@@ -1,10 +1,11 @@
 from core.instruction import Instruction
 import re
 
+
 # -----------------------------
 # MIPS register mapping
 # -----------------------------
-register_map = {
+mips_registers = {
     "$zero":0,
 
     "$t0":8, "$t1":9, "$t2":10, "$t3":11,
@@ -16,14 +17,30 @@ register_map = {
 }
 
 
+# -----------------------------
+# register validator (รองรับ R และ $)
+# -----------------------------
 def validate_register(reg):
 
+    reg = reg.strip()
+
+    # -------- R format --------
+    if re.match(r"^R\d+$", reg):
+
+        reg_num = int(reg[1:])
+
+        if reg_num < 0 or reg_num > 31:
+            raise ValueError(f"Register out of range: {reg}")
+
+        return reg_num
+
+    # -------- MIPS format --------
     reg = reg.lower()
 
-    if reg not in register_map:
-        raise ValueError(f"Invalid register: {reg}")
+    if reg in mips_registers:
+        return mips_registers[reg]
 
-    return register_map[reg]
+    raise ValueError(f"Invalid register: {reg}")
 
 
 # -----------------------------
@@ -32,6 +49,7 @@ def validate_register(reg):
 def parse_instructions(text):
 
     lines = [line.strip() for line in text.split("\n") if line.strip()]
+
     instructions = []
 
     for line in lines:
@@ -39,6 +57,7 @@ def parse_instructions(text):
         parts = line.replace(",", "").split()
 
         instr = Instruction(line)
+
         instr.opcode = parts[0].upper()
 
         # ---------------- R TYPE ----------------
@@ -71,14 +90,17 @@ def parse_instructions(text):
 
         elif instr.opcode in ["LW","SW"]:
 
+            if len(parts) != 3:
+                raise ValueError(f"Invalid memory format\n{line}")
+
             instr.type = "I"
 
             instr.rt = validate_register(parts[1])
 
-            match = re.match(r"(-?\d+)\((\$[a-z0-9]+)\)", parts[2])
+            match = re.match(r"^(-?\d+)\(([^)]+)\)$", parts[2])
 
             if not match:
-                raise ValueError(f"Invalid memory format\n{line}")
+                raise ValueError(f"Invalid memory address format: {line}")
 
             instr.immediate = int(match.group(1))
             instr.rs = validate_register(match.group(2))
@@ -86,6 +108,9 @@ def parse_instructions(text):
         # ---------------- BRANCH ----------------
 
         elif instr.opcode in ["BEQ","BNE"]:
+
+            if len(parts) < 3:
+                raise ValueError(f"Invalid branch format\n{line}")
 
             instr.type = "B"
 
@@ -97,10 +122,11 @@ def parse_instructions(text):
         # ---------------- NOP ----------------
 
         elif instr.opcode == "NOP":
+
             instr.type = "NOP"
 
         else:
-            raise ValueError(f"Unknown opcode {instr.opcode}")
+            raise ValueError(f"Unknown opcode: {instr.opcode}")
 
         instructions.append(instr)
 
