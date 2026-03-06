@@ -18,7 +18,7 @@ def check_hazard(current_instr, previous_instr, forwarding_enabled=False):
         dest = previous_instr.rt
 
     elif previous_instr.opcode == "JAL":
-        dest = 31   # return address
+        dest = 31  # return address register
 
     if dest is None:
         return False
@@ -26,17 +26,20 @@ def check_hazard(current_instr, previous_instr, forwarding_enabled=False):
     # ------------------------------
     # หา register ที่ instruction ปัจจุบันอ่าน
     # ------------------------------
-    rs_read = getattr(current_instr, 'rs', None)
+    rs_read = getattr(current_instr, "rs", None)
     rt_read = None
 
     if current_instr.opcode in [
         "ADD","SUB","AND","OR","XOR","SLT",
         "SW","BEQ","BNE"
     ]:
-        rt_read = getattr(current_instr, 'rt', None)
+        rt_read = getattr(current_instr, "rt", None)
+
+    elif current_instr.opcode == "JR":
+        rs_read = current_instr.rs
 
     # ------------------------------
-    # เช็ค hazard
+    # ตรวจ hazard
     # ------------------------------
     hazard = (
         (rs_read is not None and rs_read == dest) or
@@ -47,13 +50,13 @@ def check_hazard(current_instr, previous_instr, forwarding_enabled=False):
         return False
 
     # ------------------------------
-    # ไม่มี forwarding -> stall
+    # ไม่มี forwarding → stall
     # ------------------------------
     if not forwarding_enabled:
         return True
 
     # ------------------------------
-    # มี forwarding -> stall เฉพาะ load-use
+    # มี forwarding → stall เฉพาะ load-use
     # ------------------------------
     if previous_instr.opcode == "LW":
         return True
