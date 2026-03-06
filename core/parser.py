@@ -1,126 +1,107 @@
 from core.instruction import Instruction
 import re
 
+# -----------------------------
+# MIPS register mapping
+# -----------------------------
+register_map = {
+    "$zero":0,
 
-# -----------------------------
-# ฟังก์ชันตรวจสอบ register
-# เช่น R0 - R31
-# -----------------------------
+    "$t0":8, "$t1":9, "$t2":10, "$t3":11,
+    "$t4":12, "$t5":13, "$t6":14, "$t7":15,
+    "$t8":24, "$t9":25,
+
+    "$s0":16, "$s1":17, "$s2":18, "$s3":19,
+    "$s4":20, "$s5":21, "$s6":22, "$s7":23
+}
+
+
 def validate_register(reg):
 
-    # ตรวจสอบ format ว่าต้องเป็น R ตามด้วยตัวเลข
-    if not re.match(r"^R\d+$", reg):
+    reg = reg.lower()
+
+    if reg not in register_map:
         raise ValueError(f"Invalid register: {reg}")
 
-    # เอาเลขหลัง R ออกมา
-    reg_num = int(reg[1:])
-
-    # ตรวจสอบช่วง register (R0 - R31)
-    if reg_num < 0 or reg_num > 31:
-        raise ValueError(f"Register out of range: {reg}")
-
-    return reg_num
+    return register_map[reg]
 
 
 # -----------------------------
-# Parser หลัก
-# แปลง Assembly Text → Instruction Objects
+# Parser
 # -----------------------------
 def parse_instructions(text):
 
-    # แยก input ตามบรรทัด
-    # และลบบรรทัดว่าง
     lines = [line.strip() for line in text.split("\n") if line.strip()]
-
-    # list สำหรับเก็บ instruction
     instructions = []
 
     for line in lines:
 
-        # เอา comma ออก เช่น
-        # ADD R1,R2,R3 -> ADD R1 R2 R3
         parts = line.replace(",", "").split()
 
-        if len(parts) == 0:
-            continue
-
-        # สร้าง Instruction object
         instr = Instruction(line)
-
-        # opcode เช่น ADD SUB LW
         instr.opcode = parts[0].upper()
 
-        # =============================
-        # R-Type Instructions
-        # ADD R1 R2 R3
-        # SUB R1 R2 R3
-        # AND R1 R2 R3
-        # OR  R1 R2 R3
-        # =============================
-        if instr.opcode in ["ADD", "SUB", "AND", "OR"]:
+        # ---------------- R TYPE ----------------
 
-            # ต้องมี operand 3 ตัว
+        if instr.opcode in ["ADD","SUB","AND","OR","XOR","SLT"]:
+
             if len(parts) != 4:
                 raise ValueError(f"Invalid R-type format\n{line}")
 
             instr.type = "R"
 
-            # destination register
             instr.rd = validate_register(parts[1])
-
-            # source register
             instr.rs = validate_register(parts[2])
-
-            # source register
             instr.rt = validate_register(parts[3])
 
-        # =============================
-        # Memory Instructions
-        # LW R1 4(R2)
-        # SW R3 8(R4)
-        # =============================
-        elif instr.opcode in ["LW", "SW"]:
+        # ---------------- IMMEDIATE ----------------
 
-            if len(parts) != 3:
-                raise ValueError(f"Invalid memory format: {line}")
+        elif instr.opcode in ["ADDI","ANDI","ORI"]:
+
+            if len(parts) != 4:
+                raise ValueError(f"Invalid I-type format\n{line}")
 
             instr.type = "I"
 
-            # register ที่ load/store
+            instr.rt = validate_register(parts[1])
+            instr.rs = validate_register(parts[2])
+            instr.immediate = int(parts[3])
+
+        # ---------------- MEMORY ----------------
+
+        elif instr.opcode in ["LW","SW"]:
+
+            instr.type = "I"
+
             instr.rt = validate_register(parts[1])
 
-            offset_part = parts[2]
-
-            # ตรวจสอบรูปแบบ offset(base)
-            # เช่น 4(R2)
-            match = re.match(r"^(-?\d+)\((R\d+)\)$", offset_part)
+            match = re.match(r"(-?\d+)\((\$[a-z0-9]+)\)", parts[2])
 
             if not match:
-                raise ValueError(f"Invalid memory address format: {line}")
+                raise ValueError(f"Invalid memory format\n{line}")
 
-            # offset เช่น 4
-            offset = int(match.group(1))
+            instr.immediate = int(match.group(1))
+            instr.rs = validate_register(match.group(2))
 
-            # base register เช่น R2
-            base_reg = match.group(2)
+        # ---------------- BRANCH ----------------
 
-            instr.immediate = offset
-            instr.rs = validate_register(base_reg)
+        elif instr.opcode in ["BEQ","BNE"]:
 
-        # =============================
-        # NOP Instruction
-        # =============================
+            instr.type = "B"
+
+            instr.rs = validate_register(parts[1])
+            instr.rt = validate_register(parts[2])
+
+            instr.immediate = 0
+
+        # ---------------- NOP ----------------
+
         elif instr.opcode == "NOP":
-
             instr.type = "NOP"
 
-        # =============================
-        # Unknown opcode
-        # =============================
         else:
-            raise ValueError(f"Unknown opcode: {instr.opcode}")
+            raise ValueError(f"Unknown opcode {instr.opcode}")
 
-        # เพิ่ม instruction ลง list
         instructions.append(instr)
 
     return instructions
