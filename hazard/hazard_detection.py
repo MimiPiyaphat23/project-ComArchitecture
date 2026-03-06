@@ -1,32 +1,61 @@
 def check_hazard(current_instr, previous_instr, forwarding_enabled=False):
+
     if current_instr is None or previous_instr is None:
         return False
 
-    # หา Register ปลายทาง (ที่กำลังจะเขียน) ของคำสั่งก่อนหน้า (EX)
+    # ------------------------------
+    # หา destination register ของคำสั่งก่อนหน้า
+    # ------------------------------
     dest = None
-    if previous_instr.opcode in ["ADD", "SUB"]:
+
+    if previous_instr.opcode in ["ADD", "SUB", "AND", "OR", "XOR", "SLT"]:
         dest = previous_instr.rd
+
+    elif previous_instr.opcode in ["ADDI", "ANDI", "ORI"]:
+        dest = previous_instr.rt
+
     elif previous_instr.opcode == "LW":
         dest = previous_instr.rt
+
+    elif previous_instr.opcode == "JAL":
+        dest = 31   # return address
 
     if dest is None:
         return False
 
-    # หา Register ต้นทาง (ที่ต้องอ่านจริงๆ) ของคำสั่งปัจจุบัน (ID)
-    # ADD, SUB, SW ต้องอ่านทั้ง rs และ rt
-    # แต่ LW อ่านแค่ rs อย่างเดียว (rt คือปลายทาง)
+    # ------------------------------
+    # หา register ที่ instruction ปัจจุบันอ่าน
+    # ------------------------------
     rs_read = getattr(current_instr, 'rs', None)
-    rt_read = getattr(current_instr, 'rt', None) if current_instr.opcode in ["ADD", "SUB", "SW"] else None
+    rt_read = None
 
-    # ตรวจสอบว่า ID ต้องใช้ Register จาก EX หรือไม่
-    if (rs_read is not None and rs_read == dest) or (rt_read is not None and rt_read == dest):
-        
-        # ปิด Forwarding -> Stall เสมอ
-        if not forwarding_enabled:
-            return True
-            
-        # เปิด Forwarding -> Stall แค่กรณี Load-Use
-        if previous_instr.opcode == "LW":
-            return True
+    if current_instr.opcode in [
+        "ADD","SUB","AND","OR","XOR","SLT",
+        "SW","BEQ","BNE"
+    ]:
+        rt_read = getattr(current_instr, 'rt', None)
+
+    # ------------------------------
+    # เช็ค hazard
+    # ------------------------------
+    hazard = (
+        (rs_read is not None and rs_read == dest) or
+        (rt_read is not None and rt_read == dest)
+    )
+
+    if not hazard:
+        return False
+
+    # ------------------------------
+    # ไม่มี forwarding -> stall
+    # ------------------------------
+    if not forwarding_enabled:
+        return True
+
+    # ------------------------------
+    # มี forwarding -> stall เฉพาะ load-use
+    # ------------------------------
+    if previous_instr.opcode == "LW":
+        return True
 
     return False

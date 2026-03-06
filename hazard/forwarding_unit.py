@@ -1,26 +1,42 @@
 def apply_forwarding(current_instr, previous_instr):
-    """
-    current_instr = คำสั่งที่อยู่ใน EX
-    previous_instr = คำสั่งที่อยู่ใน MEM หรือ WB
-    """
+
     if current_instr is None or previous_instr is None:
         return False
 
-    # หา destination ของคำสั่งก่อนหน้า
+    # ------------------------------
+    # destination register
+    # ------------------------------
     dest = None
-    if previous_instr.opcode in ["ADD", "SUB"]:
+
+    if previous_instr.opcode in ["ADD", "SUB", "AND", "OR", "XOR", "SLT"]:
         dest = previous_instr.rd
+
+    elif previous_instr.opcode in ["ADDI", "ANDI", "ORI"]:
+        dest = previous_instr.rt
+
     elif previous_instr.opcode == "LW":
         dest = previous_instr.rt
+
+    elif previous_instr.opcode == "JAL":
+        dest = 31
 
     if dest is None:
         return False
 
-    # หา Register ต้นทางที่ EX ต้องใช้
+    # ------------------------------
+    # registers ที่ EX stage ต้องใช้
+    # ------------------------------
     rs_read = getattr(current_instr, 'rs', None)
-    rt_read = getattr(current_instr, 'rt', None) if current_instr.opcode in ["ADD", "SUB", "SW"] else None
 
-    if (rs_read is not None and rs_read == dest) or (rt_read is not None and rt_read == dest):
+    rt_read = None
+    if current_instr.opcode in [
+        "ADD","SUB","AND","OR","XOR","SLT",
+        "SW","BEQ","BNE"
+    ]:
+        rt_read = getattr(current_instr, 'rt', None)
+
+    if (rs_read is not None and rs_read == dest) or \
+       (rt_read is not None and rt_read == dest):
         return True
 
     return False
