@@ -18,13 +18,27 @@ mips_registers = {
 
 
 # -----------------------------
-# register validator (รองรับ R และ $)
+# Error helper
+# -----------------------------
+def format_error(line, correct, example):
+
+    raise ValueError(
+        f"Invalid instruction format:\n"
+        f"{line}\n\n"
+        f"Correct format:\n{correct}\n"
+        f"Example:\n{example}"
+    )
+
+
+# -----------------------------
+# register validator
+# รองรับ R1 และ $t0
 # -----------------------------
 def validate_register(reg):
 
     reg = reg.strip()
 
-    # -------- R format --------
+    # R format
     if re.match(r"^R\d+$", reg):
 
         reg_num = int(reg[1:])
@@ -34,7 +48,7 @@ def validate_register(reg):
 
         return reg_num
 
-    # -------- MIPS format --------
+    # MIPS format
     reg = reg.lower()
 
     if reg in mips_registers:
@@ -61,11 +75,14 @@ def parse_instructions(text):
         instr.opcode = parts[0].upper()
 
         # ---------------- R TYPE ----------------
-
         if instr.opcode in ["ADD","SUB","AND","OR","XOR","SLT"]:
 
             if len(parts) != 4:
-                raise ValueError(f"Invalid R-type format\n{line}")
+                format_error(
+                    line,
+                    f"{instr.opcode} Rd, Rs, Rt",
+                    f"{instr.opcode} $s0, $t1, $t2"
+                )
 
             instr.type = "R"
 
@@ -73,12 +90,31 @@ def parse_instructions(text):
             instr.rs = validate_register(parts[2])
             instr.rt = validate_register(parts[3])
 
-        # ---------------- IMMEDIATE ----------------
+        # ---------------- SHIFT ----------------
+        elif instr.opcode in ["SLL","SRL"]:
 
+            if len(parts) != 4:
+                format_error(
+                    line,
+                    f"{instr.opcode} Rd, Rs, shamt",
+                    f"{instr.opcode} $t0, $t1, 2"
+                )
+
+            instr.type = "R"
+
+            instr.rd = validate_register(parts[1])
+            instr.rs = validate_register(parts[2])
+            instr.immediate = int(parts[3])
+
+        # ---------------- IMMEDIATE ----------------
         elif instr.opcode in ["ADDI","ANDI","ORI"]:
 
             if len(parts) != 4:
-                raise ValueError(f"Invalid I-type format\n{line}")
+                format_error(
+                    line,
+                    f"{instr.opcode} Rt, Rs, imm",
+                    f"{instr.opcode} $t0, $t1, 10"
+                )
 
             instr.type = "I"
 
@@ -87,11 +123,14 @@ def parse_instructions(text):
             instr.immediate = int(parts[3])
 
         # ---------------- MEMORY ----------------
-
         elif instr.opcode in ["LW","SW"]:
 
             if len(parts) != 3:
-                raise ValueError(f"Invalid memory format\n{line}")
+                format_error(
+                    line,
+                    f"{instr.opcode} Rt, offset(Rs)",
+                    f"{instr.opcode} $t0, 4($t1)"
+                )
 
             instr.type = "I"
 
@@ -100,31 +139,76 @@ def parse_instructions(text):
             match = re.match(r"^(-?\d+)\(([^)]+)\)$", parts[2])
 
             if not match:
-                raise ValueError(f"Invalid memory address format: {line}")
+                format_error(
+                    line,
+                    f"{instr.opcode} Rt, offset(Rs)",
+                    f"{instr.opcode} $t0, 4($t1)"
+                )
 
             instr.immediate = int(match.group(1))
             instr.rs = validate_register(match.group(2))
 
         # ---------------- BRANCH ----------------
-
         elif instr.opcode in ["BEQ","BNE"]:
 
-            if len(parts) < 3:
-                raise ValueError(f"Invalid branch format\n{line}")
+            if len(parts) != 4:
+                format_error(
+                    line,
+                    f"{instr.opcode} Rs, Rt, offset",
+                    f"{instr.opcode} $t0, $t1, 8"
+                )
 
             instr.type = "B"
 
             instr.rs = validate_register(parts[1])
             instr.rt = validate_register(parts[2])
+            instr.immediate = int(parts[3])
 
-            instr.immediate = 0
+        # ---------------- JUMP ----------------
+        elif instr.opcode == "J":
+
+            if len(parts) != 2:
+                format_error(
+                    line,
+                    "J address",
+                    "J 100"
+                )
+
+            instr.type = "J"
+            instr.immediate = int(parts[1])
+
+
+        elif instr.opcode == "JAL":
+
+            if len(parts) != 2:
+                format_error(
+                    line,
+                    "JAL address",
+                    "JAL 200"
+                )
+
+            instr.type = "J"
+            instr.immediate = int(parts[1])
+
+
+        elif instr.opcode == "JR":
+
+            if len(parts) != 2:
+                format_error(
+                    line,
+                    "JR Rs",
+                    "JR $ra"
+                )
+
+            instr.type = "J"
+            instr.rs = validate_register(parts[1])
 
         # ---------------- NOP ----------------
-
         elif instr.opcode == "NOP":
 
             instr.type = "NOP"
 
+        # ---------------- UNKNOWN ----------------
         else:
             raise ValueError(f"Unknown opcode: {instr.opcode}")
 
