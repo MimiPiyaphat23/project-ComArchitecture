@@ -4,7 +4,7 @@ import re
 
 # =========================================================
 # MIPS REGISTER MAP
-# แปลงชื่อ register แบบ MIPS เช่น $t0 -> index ของ register
+# แปลงชื่อ register แบบ MIPS -> index ของ register
 # =========================================================
 mips_registers = {
 
@@ -31,7 +31,7 @@ mips_registers = {
 
 # =========================================================
 # ERROR HELPER
-# ฟังก์ชันช่วยแสดง error format ที่ถูกต้อง
+# ใช้สำหรับแสดง error format instruction
 # =========================================================
 def format_error(line, correct, example):
 
@@ -45,17 +45,16 @@ def format_error(line, correct, example):
 
 # =========================================================
 # REGISTER VALIDATOR
-# ตรวจสอบว่า register ถูกต้องหรือไม่
 #
 # รองรับ 2 รูปแบบ
-# 1. R1 R2 R3
-# 2. $t0 $s1 $ra
+#   R1
+#   $t0
 # =========================================================
 def validate_register(reg):
 
     reg = reg.strip()
 
-    # ---------- รูปแบบ R1 ----------
+    # -------- รูปแบบ R1 --------
     if re.match(r"^R\d+$", reg):
 
         reg_num = int(reg[1:])
@@ -65,7 +64,7 @@ def validate_register(reg):
 
         return reg_num
 
-    # ---------- รูปแบบ $t0 ----------
+    # -------- รูปแบบ $t0 --------
     reg = reg.lower()
 
     if reg in mips_registers:
@@ -76,12 +75,13 @@ def validate_register(reg):
 
 # =========================================================
 # MAIN PARSER
-# ทำหน้าที่แปลง text assembly -> instruction objects
+#
+# แปลง assembly text -> instruction objects
 #
 # ใช้ 2 PASS
 #
 # PASS 1 : หา label และตำแหน่ง instruction
-# PASS 2 : parse instruction จริง
+# PASS 2 : parse instruction
 # =========================================================
 def parse_instructions(text):
 
@@ -92,6 +92,7 @@ def parse_instructions(text):
 
     for line in text.split("\n"):
 
+        # ลบ comment
         line = line.split("#")[0].strip()
 
         if line:
@@ -102,14 +103,13 @@ def parse_instructions(text):
 
     # =====================================================
     # PASS 1 : เก็บตำแหน่ง label
-    # เช่น
     #
+    # Example
     # Loop:
     # ADD $t0,$t1,$t2
     #
     # Loop -> instruction index
     # =====================================================
-
     index = 0
 
     for line in raw_lines:
@@ -122,10 +122,10 @@ def parse_instructions(text):
         else:
             index += 1
 
-    # =====================================================
-    # PASS 2 : parse instruction จริง
-    # =====================================================
 
+    # =====================================================
+    # PASS 2 : parse instruction
+    # =====================================================
     for line in raw_lines:
 
         # ข้าม label
@@ -133,11 +133,13 @@ def parse_instructions(text):
             continue
 
         # แยก opcode และ operand
-        parts = line.replace(",", "").split()
+        parts = re.split(r'[,\s]+', line.strip())
 
         instr = Instruction(line)
 
+        # แปลง opcode เป็นตัวใหญ่
         instr.opcode = parts[0].upper()
+
 
         # =================================================
         # R TYPE
@@ -158,8 +160,9 @@ def parse_instructions(text):
             instr.rs = validate_register(parts[2])
             instr.rt = validate_register(parts[3])
 
+
         # =================================================
-        # SHIFT INSTRUCTION
+        # SHIFT
         # SLL Rd, Rs, shamt
         # =================================================
         elif instr.opcode in ["SLL","SRL"]:
@@ -176,6 +179,7 @@ def parse_instructions(text):
             instr.rd = validate_register(parts[1])
             instr.rs = validate_register(parts[2])
             instr.immediate = int(parts[3])
+
 
         # =================================================
         # IMMEDIATE TYPE
@@ -196,8 +200,9 @@ def parse_instructions(text):
             instr.rs = validate_register(parts[2])
             instr.immediate = int(parts[3])
 
+
         # =================================================
-        # MEMORY INSTRUCTION
+        # MEMORY
         # LW Rt, offset(Rs)
         # =================================================
         elif instr.opcode in ["LW","SW"]:
@@ -225,8 +230,9 @@ def parse_instructions(text):
             instr.immediate = int(match.group(1))
             instr.rs = validate_register(match.group(2))
 
+
         # =================================================
-        # BRANCH INSTRUCTION
+        # BRANCH
         # BEQ Rs, Rt, label
         # =================================================
         elif instr.opcode in ["BEQ","BNE"]:
@@ -245,14 +251,20 @@ def parse_instructions(text):
 
             target = parts[3]
 
-            # ถ้าเป็น label -> แปลงเป็น instruction index
+            # ถ้าเป็น label
             if target in labels:
                 instr.immediate = labels[target]
+
+            # ถ้าเป็นตัวเลข
             else:
-                instr.immediate = int(target)
+                try:
+                    instr.immediate = int(target)
+                except:
+                    raise ValueError(f"Unknown label: {target}")
+
 
         # =================================================
-        # JUMP INSTRUCTION
+        # JUMP
         # J label
         # =================================================
         elif instr.opcode in ["J","JAL"]:
@@ -271,11 +283,14 @@ def parse_instructions(text):
             if target in labels:
                 instr.immediate = labels[target]
             else:
-                instr.immediate = int(target)
+                try:
+                    instr.immediate = int(target)
+                except:
+                    raise ValueError(f"Unknown label: {target}")
+
 
         # =================================================
-        # JR INSTRUCTION
-        # JR Rs
+        # JR
         # =================================================
         elif instr.opcode == "JR":
 
@@ -287,8 +302,8 @@ def parse_instructions(text):
                 )
 
             instr.type = "J"
-
             instr.rs = validate_register(parts[1])
+
 
         # =================================================
         # NOP
@@ -297,11 +312,13 @@ def parse_instructions(text):
 
             instr.type = "NOP"
 
+
         # =================================================
         # UNKNOWN OPCODE
         # =================================================
         else:
             raise ValueError(f"Unknown opcode: {instr.opcode}")
+
 
         instructions.append(instr)
 
