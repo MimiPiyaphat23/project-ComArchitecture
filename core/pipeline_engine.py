@@ -1,6 +1,6 @@
 from hazard.pipeline_control import PipelineControl
 from core.alu import execute_alu
-
+from core.branch import is_branch_taken
 
 class Pipeline:
 
@@ -136,6 +136,17 @@ class Pipeline:
 
                     IF = None
                     ID = None
+                
+                # -------- BRANCH LOGIC (เพิ่มใหม่ตรงนี้) --------
+                
+                elif instr.opcode in ["BEQ", "BNE"]:
+                    
+                    if is_branch_taken(instr, alu_result):
+                        
+                        pc = instr.immediate  
+                        
+                        IF = None
+                        ID = None
 
             # ---------------- PIPELINE SHIFT ----------------
 
