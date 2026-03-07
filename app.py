@@ -13,13 +13,17 @@ enable_forwarding = st.checkbox("Enable Forwarding")
 
 if st.button("Run Simulation"):
 
-    instructions = parse_instructions(instruction_text)
+    try:
+        instructions = parse_instructions(instruction_text)
 
-    pipeline = Pipeline(instructions, enable_forwarding)
-    timeline = pipeline.run()
+        pipeline = Pipeline(instructions, enable_forwarding)
+        timeline = pipeline.run()
 
-    display_timeline(timeline)
+        display_timeline(timeline)
 
-    metrics = calculate_metrics(timeline)
-    st.write(f"Total Cycles: {metrics['cycles']}")
-    st.write(f"CPI: {metrics['cpi']}")
+        metrics = calculate_metrics(timeline)
+        st.write(f"Total Cycles: {metrics['cycles']}")
+        st.write(f"CPI: {metrics['cpi']}")
+    except Exception as e:
+        st.error("Error running simulation")
+        st.code(str(e))

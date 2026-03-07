@@ -1,42 +1,49 @@
 def execute_alu(instr, rs_val, rt_val):
 
-    # Safety check
-    # ถ้าไม่มี instruction (pipeline ว่าง) ไม่ต้องทำอะไร
     if instr is None:
         return None
 
-    # อ่าน opcode เพื่อใช้ตัดสินว่าจะคำนวณแบบไหน
     op = instr.opcode
 
-    # ==================================================
-    # R-type operations
-    # ==================================================
+    # -------- R TYPE --------
 
-
-    # ADD : R[rd] = R[rs] + R[rt]
-    # ALU ทำแค่คำนวณ ไม่เขียน register
     if op == "ADD":
         return rs_val + rt_val
 
-    # SUB : R[rd] = R[rs] - R[rt]
     if op == "SUB":
         return rs_val - rt_val
 
-    # Memory address calculation
-    # effective address = base(rs) + immediate
-    if op in ["LW", "SW"]:
-        # ตรวจว่า immediate มีจริง
-        if instr.immediate is None:
-            raise ValueError("Immediate missing for memory instruction")
+    if op == "AND":
+        return rs_val & rt_val
 
-        # คำนวณ address
+    if op == "OR":
+        return rs_val | rt_val
+
+    if op == "XOR":
+        return rs_val ^ rt_val
+
+    if op == "SLT":
+        return 1 if rs_val < rt_val else 0
+
+    # -------- I TYPE --------
+
+    if op == "ADDI":
         return rs_val + instr.immediate
 
-    # Branch (เตรียมไว้สำหรับอนาคต)
-    # BEQ จะใช้ผลต่างเพื่อตรวจ zero
-    if op == "BEQ":
-        # ถ้า rs == rt → ผลลัพธ์จะเป็น 0
-        return rs_val - rt_val
+    if op == "ANDI":
+        return rs_val & instr.immediate
 
-    # Unsupported instruction
+    if op == "ORI":
+        return rs_val | instr.immediate
+
+    # -------- MEMORY --------
+
+    if op in ["LW","SW"]:
+        return rs_val + instr.immediate
+
+    # -------- BRANCH --------
+
+    if op in ["BEQ","BNE"]:
+        return rs_val - rt_val     
+
     return None
