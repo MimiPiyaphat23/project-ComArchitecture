@@ -20,6 +20,12 @@ STAGE_COLORS = {
     "IF": "#4FC3F7", "ID": "#81C784", "EX": "#FFD54F",
     "MEM": "#FFB74D", "WB": "#E57373", "STALL": "#B0BEC5", "": "#f0f0f0",
 }
+REG_NAMES = [
+    "$zero","$at","$v0","$v1","$a0","$a1","$a2","$a3",
+    "$t0","$t1","$t2","$t3","$t4","$t5","$t6","$t7",
+    "$s0","$s1","$s2","$s3","$s4","$s5","$s6","$s7",
+    "$t8","$t9","$k0","$k1","$gp","$sp","$fp","$ra",
+]
 
 # ─────────────────────────────────────────────
 # HELPERS
@@ -45,17 +51,79 @@ def normalize_df(df):
     return df
 
 def count_stalls(df):
+    """
+    ตรวจ stall จาก 2 วิธี:
+    1. มีค่า "STALL" ใน cell (engine บางตัวเขียนไว้ชัดเจน)
+    2. EX ว่าง ("") แต่ MEM ไม่ว่าง — bubble ที่ถูก insert
+    """
     total, details = 0, []
-    for s in STAGES:
-        if s in df.columns:
-            for _, row in df[df[s] == "STALL"].iterrows():
-                total += 1
-                details.append({"Cycle": row.get("Cycle", "?"), "Stage": s})
+    for _, row in df.iterrows():
+        cycle = row.get("Cycle", "?")
+        is_stall = False
+
+        # วิธี 1: มี "STALL" string
+        for s in STAGES:
+            if str(row.get(s, "")).strip() == "STALL":
+                is_stall = True
+                break
+
+        # วิธี 2: EX ว่าง แต่ MEM และ WB ไม่ว่าง (bubble ถูก insert)
+        if not is_stall:
+            ex_empty  = str(row.get("EX",  "")).strip() == ""
+            mem_full  = str(row.get("MEM", "")).strip() not in ("", "STALL")
+            id_full   = str(row.get("ID",  "")).strip() not in ("", "STALL")
+            if ex_empty and mem_full and id_full:
+                is_stall = True
+
+        if is_stall:
+            total += 1
+            details.append({"Cycle": cycle, "Note": "bubble/stall detected"})
+
     return total, details
 
-def build_animation_html(df, instr_list, current, max_c):
+def detect_hazards(instr_list):
+    """
+    วิเคราะห์ RAW hazard จากชื่อ instruction
+    คืนค่า dict: { (i, j): "RAW: $s0" } — i เขียน, j อ่าน
+    """
+    hazards = {}
+
+    def parse_regs(raw):
+        """ดึง register จาก string เช่น 'ADD $s0, $t1, $t2' → ['$s0','$t1','$t2']"""
+        parts = raw.replace(",", "").split()
+        return [p for p in parts[1:] if p.startswith("$")]
+
+    def get_dest(raw):
+        regs = parse_regs(raw)
+        return regs[0] if regs else None
+
+    def get_srcs(raw):
+        regs = parse_regs(raw)
+        return regs[1:] if len(regs) > 1 else []
+
+    for i in range(len(instr_list)):
+        dest = get_dest(instr_list[i])
+        if not dest or dest == "$zero":
+            continue
+        for j in range(i + 1, min(i + 4, len(instr_list))):
+            srcs = get_srcs(instr_list[j])
+            if dest in srcs:
+                hazards[(i, j)] = f"RAW: {dest}"
+
+    return hazards
+
+def build_animation_html(df, instr_list, current, max_c, hazard_pairs=None):
+    if hazard_pairs is None:
+        hazard_pairs = {}
+
+    # สร้าง set ของ index ที่มี hazard เพื่อไฮไลต์ชื่อ instruction
+    hazard_indices = set()
+    for (i, j) in hazard_pairs:
+        hazard_indices.add(i)
+        hazard_indices.add(j)
+
     rows_html = ""
-    for instr in instr_list:
+    for idx, instr in enumerate(instr_list):
         cells = ""
         for c in range(1, max_c + 1):
             stg = ""
@@ -79,11 +147,19 @@ def build_animation_html(df, instr_list, current, max_c):
                 f'align-items:center;font-size:11px;font-weight:bold;border-radius:6px;{shadow}">'
                 f'{label}</div>'
             )
+
+        # ไฮไลต์ชื่อ instruction ถ้ามี hazard
+        has_hazard   = idx in hazard_indices
+        name_bg      = "background:#fff3cd;border-left:3px solid #f0a500;padding-left:5px;" if has_hazard else ""
+        hazard_label = " ⚠️" if has_hazard else ""
+
         rows_html += (
             f'<div style="display:flex;align-items:center;margin-bottom:6px;">'
-            f'<div style="width:190px;font-family:monospace;font-size:13px;color:#333;'
-            f'font-weight:bold;padding-right:8px;">{instr}</div>{cells}</div>'
+            f'<div style="width:210px;font-family:monospace;font-size:13px;color:#333;'
+            f'font-weight:bold;padding-right:8px;{name_bg}">{instr}{hazard_label}</div>'
+            f'{cells}</div>'
         )
+
     return (
         f'<div style="background:#fafafa;padding:20px;border:1px solid #ddd;border-radius:12px;">'
         f'<h4 style="color:#333;margin:0 0 12px 0;">⏱ Cycle: {current} / {max_c}</h4>'
@@ -140,34 +216,38 @@ st.divider()
 # ─────────────────────────────────────────────
 # MAIN LOGIC
 # ─────────────────────────────────────────────
-
-# กด Run → คำนวณใหม่ แล้วเก็บทุกอย่างใน session_state
 if run:
     try:
         instructions = parse_instructions(instruction_text)
-        tl_on  = Pipeline(instructions, forwarding_enabled=True).run()
-        tl_off = Pipeline(instructions, forwarding_enabled=False).run()
+        p_on  = Pipeline(instructions, forwarding_enabled=True)
+        p_off = Pipeline(instructions, forwarding_enabled=False)
+        tl_on  = p_on.run()
+        tl_off = p_off.run()
 
         if not tl_on:
             st.error("❌ Simulation ผลิตข้อมูลว่างเปล่า")
         else:
-            # เก็บผลไว้ใน session_state — จะยังอยู่แม้กด Prev/Next
             st.session_state.sim_ready    = True
             st.session_state.timeline_on  = tl_on
             st.session_state.timeline_off = tl_off
             st.session_state.instructions = instructions
-            st.session_state.step_cycle   = 1  # reset เมื่อ Run ใหม่
+            st.session_state.step_cycle   = 1
+            # เก็บ register state หลัง simulate เสร็จ
+            st.session_state.registers    = list(p_on.registers)
 
     except Exception as e:
         st.error(f"⚠️ Simulation Error: {e}")
         st.exception(e)
 
-# แสดงผลเมื่อมีข้อมูล (ทั้งตอน Run ครั้งแรก และตอนกด Prev/Next)
+# ─────────────────────────────────────────────
+# DISPLAY
+# ─────────────────────────────────────────────
 if st.session_state.get("sim_ready"):
 
     tl_on        = st.session_state.timeline_on
     tl_off       = st.session_state.timeline_off
     instructions = st.session_state.instructions
+    registers    = st.session_state.get("registers", [0] * 32)
 
     timeline = tl_on if enable_forwarding else tl_off
     df_tl  = normalize_df(pd.DataFrame(timeline))
@@ -181,30 +261,39 @@ if st.session_state.get("sim_ready"):
     stalls_on,  details_on  = count_stalls(df_on)
     stalls_off, details_off = count_stalls(df_off)
 
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🎬 Animation", "📊 Timeline", "⚖️ Comparison", "📄 Report"
+    # วิเคราะห์ hazard จากชื่อ instruction
+    raw_strs    = [i.raw if hasattr(i, "raw") else str(i) for i in instructions]
+    hazard_pairs = detect_hazards(raw_strs if raw_strs[0] != instructions[0] else instr_list)
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🎬 Animation", "📊 Timeline", "⚖️ Comparison", "🗂 Registers", "📄 Report"
     ])
 
     # ── TAB 1: ANIMATION ──────────────────────────────────
     with tab1:
         st.subheader("🎬 Pipeline Animation")
 
+        if hazard_pairs:
+            with st.expander("⚠️ RAW Hazards ที่ตรวจพบ", expanded=False):
+                for (i, j), label in hazard_pairs.items():
+                    st.markdown(
+                        f"- Instruction **{i+1}** (`{instr_list[i]}`) → "
+                        f"Instruction **{j+1}** (`{instr_list[j]}`) : `{label}`"
+                    )
+
         if not instr_list:
-            st.warning("⚠️ ไม่พบ instruction list — เช็ค column names ของ pipeline.run()")
+            st.warning("⚠️ ไม่พบ instruction list")
             st.dataframe(df_tl, use_container_width=True)
 
         elif mode == "⏯ Step-by-step":
-            # ── ปุ่มควบคุม ──
             col_prev, col_next, col_restart = st.columns([1, 1, 1])
             with col_prev:
-                prev_clicked = st.button("⬅ Prev", use_container_width=True)
+                prev_clicked    = st.button("⬅ Prev", use_container_width=True)
             with col_next:
-                next_clicked = st.button("Next ➡", use_container_width=True)
+                next_clicked    = st.button("Next ➡", use_container_width=True)
             with col_restart:
                 restart_clicked = st.button("🔄 Restart", use_container_width=True)
 
-            # อัปเดต step_cycle ตามปุ่มที่กด
-            # (การอัปเดตต้องเกิดก่อน render เพื่อให้แสดง cycle ที่ถูกต้อง)
             if restart_clicked:
                 st.session_state.step_cycle = 1
             elif prev_clicked and st.session_state.step_cycle > 1:
@@ -213,23 +302,20 @@ if st.session_state.get("sim_ready"):
                 st.session_state.step_cycle += 1
 
             current = st.session_state.step_cycle
-
-            # ── แสดง animation frame ──
             st.markdown(
-                build_animation_html(df_tl, instr_list, current, max_c),
+                build_animation_html(df_tl, instr_list, current, max_c, hazard_pairs),
                 unsafe_allow_html=True
             )
             st.progress(current / max_c)
             st.caption(f"Cycle {current} / {max_c}")
 
         else:
-            # Auto Run
             anim_placeholder = st.empty()
             progress_bar     = st.progress(0)
             for current in range(1, max_c + 1):
                 with anim_placeholder.container():
                     st.markdown(
-                        build_animation_html(df_tl, instr_list, current, max_c),
+                        build_animation_html(df_tl, instr_list, current, max_c, hazard_pairs),
                         unsafe_allow_html=True
                     )
                 progress_bar.progress(current / max_c)
@@ -240,7 +326,23 @@ if st.session_state.get("sim_ready"):
     # ── TAB 2: TIMELINE + STALL ────────────────────────────
     with tab2:
         st.subheader("📊 Timeline Table")
-        st.dataframe(df_tl.fillna(""), use_container_width=True)
+
+        # Hazard highlight ใน dataframe
+        def highlight_hazard(data):
+            style = pd.DataFrame("", index=data.index, columns=data.columns)
+            for idx, row in data.iterrows():
+                has_stall = any(str(row.get(s, "")).strip() == "STALL"
+                                for s in STAGES if s in data.columns)
+                ex_empty  = str(row.get("EX",  "")).strip() == ""
+                mem_full  = str(row.get("MEM", "")).strip() not in ("", "STALL")
+                id_full   = str(row.get("ID",  "")).strip() not in ("", "STALL")
+                if has_stall or (ex_empty and mem_full and id_full):
+                    style.loc[idx] = "background-color: #ffe0e0"
+            return style
+
+        styled_df = df_tl.fillna("").style.apply(highlight_hazard, axis=None)
+        st.dataframe(styled_df, use_container_width=True)
+        st.caption("🔴 แถวสีแดง = cycle ที่มี STALL เกิดขึ้น")
 
         st.subheader("🔴 Stall Details")
         details = details_on if enable_forwarding else details_off
@@ -249,24 +351,90 @@ if st.session_state.get("sim_ready"):
         else:
             st.success("✅ ไม่มี Stall เกิดขึ้น")
 
-    # ── TAB 3: COMPARISON ─────────────────────────────────
+    # ── TAB 3: COMPARISON + BAR CHART ─────────────────────
     with tab3:
         st.subheader("⚖️ Forwarding vs No Forwarding")
+
+        cycles_on  = metrics_on.get("cycles",  int(df_on["Cycle"].max()))
+        cycles_off = metrics_off.get("cycles", int(df_off["Cycle"].max()))
+        cpi_on     = round(metrics_on.get("cpi",  0), 4)
+        cpi_off    = round(metrics_off.get("cpi", 0), 4)
+
+        # ── Summary table (HTML) ──
+        def badge(val, ref, invert=True):
+            diff = val - ref
+            if diff == 0: return ""
+            worse = diff > 0 if invert else diff < 0
+            color = "#ffe0e0; color:#c0392b" if worse else "#e0f7e9; color:#1a7a3a"
+            sign  = "+" if diff > 0 else ""
+            return f'<span style="background:{color};font-size:12px;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px;">{sign}{round(diff,4)}</span>'
+
+        summary_html = f"""
+        <style>
+        .cmp {{ width:100%;border-collapse:collapse;font-family:'Segoe UI',sans-serif;margin-bottom:20px; }}
+        .cmp th {{ background:#f0f2f6;padding:12px 20px;font-size:13px;color:#555;border-bottom:2px solid #ddd; }}
+        .cmp td {{ padding:16px 20px;font-size:24px;font-weight:bold;border-bottom:1px solid #eee;vertical-align:middle; }}
+        .cmp .lbl {{ font-size:12px;color:#888;font-weight:normal;display:block;margin-bottom:2px; }}
+        .cmp .on  {{ background:#f0fff4; }}
+        .cmp .off {{ background:#fff8f8; }}
+        .cmp .row-label {{ font-size:13px;color:#555;font-weight:600;font-size:14px; }}
+        </style>
+        <table class="cmp">
+          <thead><tr>
+            <th style="text-align:left;width:130px;">Metric</th>
+            <th class="on" style="text-align:center;">✅ With Forwarding</th>
+            <th class="off" style="text-align:center;">❌ Without Forwarding</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td class="row-label">Total Cycles</td>
+              <td class="on" style="text-align:center;">{cycles_on}</td>
+              <td class="off" style="text-align:center;">{cycles_off}{badge(cycles_off, cycles_on)}</td>
+            </tr>
+            <tr>
+              <td class="row-label">CPI</td>
+              <td class="on" style="text-align:center;">{cpi_on}</td>
+              <td class="off" style="text-align:center;">{cpi_off}{badge(cpi_off, cpi_on)}</td>
+            </tr>
+            <tr>
+              <td class="row-label">Stalls</td>
+              <td class="on" style="text-align:center;">{stalls_on}</td>
+              <td class="off" style="text-align:center;">{stalls_off}{badge(stalls_off, stalls_on)}</td>
+            </tr>
+          </tbody>
+        </table>
+        """
+        st.markdown(summary_html, unsafe_allow_html=True)
+
+        # ── Bar charts ──
+        chart_df = pd.DataFrame({
+            "Mode": ["With Forwarding", "Without Forwarding"],
+            "Total Cycles": [cycles_on, cycles_off],
+            "CPI": [cpi_on, cpi_off],
+            "Stalls": [stalls_on, stalls_off],
+        })
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**Total Cycles**")
+            st.bar_chart(chart_df.set_index("Mode")["Total Cycles"], color="#4FC3F7")
+        with c2:
+            st.markdown("**CPI**")
+            st.bar_chart(chart_df.set_index("Mode")["CPI"], color="#81C784")
+        with c3:
+            st.markdown("**Stalls**")
+            st.bar_chart(chart_df.set_index("Mode")["Stalls"], color="#E57373")
+
+        st.divider()
+
+        # ── Timeline คู่กัน high fixed ──
+        st.markdown("#### 📋 Timeline Detail")
         col_a, col_b = st.columns(2)
-
         with col_a:
-            st.markdown("### ✅ With Forwarding")
-            st.metric("Total Cycles", metrics_on.get("cycles", int(df_on["Cycle"].max())))
-            st.metric("CPI",    round(metrics_on.get("cpi", 0), 4))
-            st.metric("Stalls", stalls_on)
-            st.dataframe(df_on.fillna(""), use_container_width=True)
-
+            st.markdown("**✅ With Forwarding**")
+            st.dataframe(df_on.fillna(""), use_container_width=True, height=300)
         with col_b:
-            st.markdown("### ❌ Without Forwarding")
-            st.metric("Total Cycles", metrics_off.get("cycles", int(df_off["Cycle"].max())))
-            st.metric("CPI",    round(metrics_off.get("cpi", 0), 4))
-            st.metric("Stalls", stalls_off)
-            st.dataframe(df_off.fillna(""), use_container_width=True)
+            st.markdown("**❌ Without Forwarding**")
+            st.dataframe(df_off.fillna(""), use_container_width=True, height=300)
 
         saved = stalls_off - stalls_on
         if saved > 0:
@@ -275,8 +443,37 @@ if st.session_state.get("sim_ready"):
         else:
             st.info("ℹ️ ไม่มีความแตกต่าง — instruction ชุดนี้ไม่มี hazard")
 
-    # ── TAB 4: REPORT ─────────────────────────────────────
+    # ── TAB 4: REGISTER FILE VIEWER ───────────────────────
     with tab4:
+        st.subheader("🗂 Register File (หลัง Simulate)")
+        st.caption("แสดงค่า register ทั้ง 32 ตัวหลังจาก pipeline ทำงานเสร็จ (With Forwarding)")
+
+        reg_data = []
+        for i, val in enumerate(registers):
+            reg_data.append({
+                "Index": f"${i}",
+                "Name": REG_NAMES[i] if i < len(REG_NAMES) else f"$r{i}",
+                "Value (Dec)": val,
+                "Value (Hex)": hex(val & 0xFFFFFFFF),
+                "Value (Bin)": f"{val & 0xFFFFFFFF:032b}",
+            })
+
+        df_reg = pd.DataFrame(reg_data)
+
+        # ไฮไลต์ register ที่ไม่ใช่ 0 (มีการเขียน)
+        def highlight_nonzero(row):
+            return ["background-color: #e8f5e9" if row["Value (Dec)"] != 0 else ""
+                    for _ in row]
+
+        st.dataframe(
+            df_reg.style.apply(highlight_nonzero, axis=1),
+            use_container_width=True,
+            height=400,
+        )
+        st.caption("🟢 สีเขียว = register ที่มีค่าไม่เป็น 0 (ถูกเขียนทับระหว่าง simulation)")
+
+    # ── TAB 5: REPORT ─────────────────────────────────────
+    with tab5:
         st.subheader("📄 Performance Report")
         report_text = generate_report(
             instructions, metrics_on, metrics_off, stalls_on, stalls_off
