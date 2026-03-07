@@ -36,14 +36,35 @@ def execute_alu(instr, rs_val, rt_val):
     if op == "ORI":
         return rs_val | instr.immediate
 
-    # -------- MEMORY --------
+    # =====================================================
+    # MEMORY INSTRUCTIONS
+    # ใช้คำนวณ address
+    # =====================================================
 
-    if op in ["LW","SW"]:
+    # LW Rt, offset(Rs)
+    # address = Rs + offset
+    if op == "LW":
         return rs_val + instr.immediate
 
-    # -------- BRANCH --------
+    # SW Rt, offset(Rs)
+    # address = Rs + offset
+    if op == "SW":
+        return rs_val + instr.immediate
 
-    if op in ["BEQ","BNE"]:
-        return rs_val - rt_val     
+
+    # =====================================================
+    # BRANCH INSTRUCTIONS
+    # ใช้ผลลัพธ์เพื่อตัดสิน branch
+    # =====================================================
+
+    # BEQ Rs, Rt, label
+    # ถ้า Rs == Rt -> result = 0
+    if op == "BEQ":
+        return rs_val - rt_val
+
+    # BNE Rs, Rt, label
+    # ถ้า Rs != Rt -> result != 0
+    if op == "BNE":
+        return rs_val - rt_val
 
     return None
