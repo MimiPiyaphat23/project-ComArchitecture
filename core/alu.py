@@ -44,17 +44,6 @@ def execute_alu(instr, rs_val, rt_val):
     # -------- BRANCH --------
 
     if op in ["BEQ","BNE"]:
-        return rs_val - rt_val
-    
-    # -------- JUMP --------
-    
-    if op == "J":
-        return instr.address
-
-    if op == "JAL":
-        return instr.address  
-
-    if op == "JR":
-        return rs_val        
+        return rs_val - rt_val     
 
     return None
