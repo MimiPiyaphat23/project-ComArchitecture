@@ -164,4 +164,5 @@ python -m pip install streamlit
 
 # Run application
 python -m streamlit run app.py
+python -m streamlit run appforUI.py
 
