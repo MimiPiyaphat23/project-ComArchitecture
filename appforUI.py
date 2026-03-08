@@ -11,28 +11,39 @@ except ImportError as e:
     st.error(f"❌ ไม่สามารถโหลด Core Logic ได้: {e}")
 
 def calculate_metrics(timeline):
-    """Fixed version — กรอง trailing empty rows ก่อนนับ cycle"""
+    """Fixed version — นับ cycle จาก WB last - IF first + 1"""
     if not timeline:
         return {"cycles": 0, "cpi": 0, "instructions": 0, "stalls": 0}
     stages = ["IF", "ID", "EX", "MEM", "WB"]
 
-    # กรอง rows ที่ทุก stage ว่างออก (trailing empty)
+    # กรอง trailing empty rows ออก
     active = [r for r in timeline
               if any(str(r.get(s,"")).strip() not in ("","STALL") for s in stages)]
+    if not active:
+        return {"cycles": 0, "cpi": 0, "instructions": 0, "stalls": 0}
+
+    # total_cycles = จำนวน active rows (แต่ละ row = 1 cycle จริงๆ)
     total_cycles = len(active)
 
+    # นับ instruction ที่ผ่าน WB
     instructions_done = set()
     stall_count = 0
-    for row in active:
+    for i, row in enumerate(active):
         wb = str(row.get("WB","")).strip()
         if wb and wb != "STALL":
             instructions_done.add(wb)
-        for s in stages:
-            if str(row.get(s,"")).strip() == "STALL":
-                stall_count += 1
-                break
+        # นับ stall: STALL string หรือ EX ว่างแต่ ID มีค่า หรือ ID ซ้ำ row ก่อน
+        is_stall = any(str(row.get(s,"")).strip() == "STALL" for s in stages)
+        if not is_stall and i > 0:
+            id_curr = str(row.get("ID","")).strip()
+            id_prev = str(active[i-1].get("ID","")).strip()
+            if id_curr and id_curr not in ("","STALL") and id_curr == id_prev:
+                is_stall = True
+        if is_stall:
+            stall_count += 1
 
     n = len(instructions_done)
+    # fallback: นับจาก IF
     if n == 0:
         for row in active:
             v = str(row.get("IF","")).strip()
@@ -330,12 +341,14 @@ def normalize_df(df):
 
 def count_stalls(df):
     """
-    ตรวจ stall จาก 2 วิธี:
-    1. มีค่า "STALL" ใน cell (engine บางตัวเขียนไว้ชัดเจน)
-    2. EX ว่าง ("") แต่ MEM ไม่ว่าง — bubble ที่ถูก insert
+    ตรวจ stall จาก 3 วิธี:
+    1. มีค่า "STALL" ใน cell
+    2. EX ว่าง แต่ ID ไม่ว่าง (bubble inserted — EX ควรมี instruction แต่ว่าง)
+    3. ID ซ้ำกับ row ก่อนหน้า (instruction ถูก hold ใน ID stage)
     """
     total, details = 0, []
-    for _, row in df.iterrows():
+    rows = list(df.iterrows())
+    for i, (_, row) in enumerate(rows):
         cycle = row.get("Cycle", "?")
         is_stall = False
 
@@ -345,12 +358,12 @@ def count_stalls(df):
                 is_stall = True
                 break
 
-        # วิธี 2: EX ว่าง แต่ MEM และ WB ไม่ว่าง (bubble ถูก insert)
-        if not is_stall:
-            ex_empty  = str(row.get("EX",  "")).strip() == ""
-            mem_full  = str(row.get("MEM", "")).strip() not in ("", "STALL")
-            id_full   = str(row.get("ID",  "")).strip() not in ("", "STALL")
-            if ex_empty and mem_full and id_full:
+        # วิธี 2: ID ซ้ำกับ row ก่อนหน้า = instruction ถูก hold (stall จริง)
+        if not is_stall and i > 0:
+            prev_row = rows[i-1][1]
+            id_curr = str(row.get("ID", "")).strip()
+            id_prev = str(prev_row.get("ID", "")).strip()
+            if id_curr and id_curr not in ("", "STALL") and id_curr == id_prev:
                 is_stall = True
 
         if is_stall:
@@ -655,6 +668,7 @@ if st.session_state.get("sim_ready"):
     max_c           = len(df_tl)
     metrics_on  = calculate_metrics(tl_on)
     metrics_off = calculate_metrics(tl_off)
+
     stalls_on,  details_on  = count_stalls(df_on)
     stalls_off, details_off = count_stalls(df_off)
 
@@ -748,13 +762,20 @@ if st.session_state.get("sim_ready"):
 
         import html as _html
 
-        def is_stall_row(row):
-            has_stall = any(str(row.get(s, "")).strip() == "STALL"
-                            for s in STAGES if s in df_tl.columns)
-            ex_empty  = str(row.get("EX",  "")).strip() == ""
-            mem_full  = str(row.get("MEM", "")).strip() not in ("", "STALL")
-            id_full   = str(row.get("ID",  "")).strip() not in ("", "STALL")
-            return has_stall or (ex_empty and mem_full and id_full)
+        def is_stall_row(row, prev_row=None):
+            if any(str(row.get(s, "")).strip() == "STALL" for s in STAGES if s in df_tl.columns):
+                return True
+            if prev_row is not None:
+                id_curr = str(row.get("ID", "")).strip()
+                id_prev = str(prev_row.get("ID", "")).strip()
+                if id_curr and id_curr not in ("", "STALL") and id_curr == id_prev:
+                    return True
+            return False
+
+        def is_stall_row_idx(df, idx):
+            row  = df.iloc[idx]
+            prev = df.iloc[idx - 1] if idx > 0 else None
+            return is_stall_row(row, prev)
 
         # Filter controls
         fcol1, fcol2, fcol3 = st.columns([2, 1, 1])
@@ -776,7 +797,9 @@ if st.session_state.get("sim_ready"):
             )
             df_view = df_view[mask]
         if filter_stall:
-            df_view = df_view[df_view.apply(is_stall_row, axis=1)]
+            stall_mask = [is_stall_row_idx(df_view.reset_index(drop=True), i)
+                          for i in range(len(df_view))]
+            df_view = df_view[stall_mask]
         if filter_cycle > 0:
             df_view = df_view[df_view["Cycle"] == filter_cycle]
 
@@ -786,8 +809,10 @@ if st.session_state.get("sim_ready"):
                     "padding:10px 14px;text-align:left;white-space:nowrap;")
         th_html = "".join(f'<th style="{th_style}">{c}</th>' for c in cols)
         rows_html = ""
-        for _, row in df_view.iterrows():
-            stall = is_stall_row(row)
+        df_view_r = df_view.reset_index(drop=True)
+        for i, (_, row) in enumerate(df_view_r.iterrows()):
+            prev = df_view_r.iloc[i-1] if i > 0 else None
+            stall = is_stall_row(row, prev)
             bg = "#fde8e8" if stall else "white"
             tr = ""
             for c in cols:
@@ -905,8 +930,10 @@ if st.session_state.get("sim_ready"):
                         "padding:8px 12px;text-align:left;white-space:nowrap;")
             th_html = "".join(f'<th style="{th_style}">{c}</th>' for c in cols)
             rows_html = ""
-            for _, row in df.fillna("").iterrows():
-                stall = stall_fn(row)
+            df_r = df.fillna("").reset_index(drop=True)
+            for i, (_, row) in enumerate(df_r.iterrows()):
+                prev = df_r.iloc[i-1] if i > 0 else None
+                stall = stall_fn(row, prev)
                 bg = "#fde8e8" if stall else "white"
                 tr = ""
                 for c in cols:
@@ -924,13 +951,16 @@ if st.session_state.get("sim_ready"):
               </table></div>"""
 
         def is_stall_row_gen(df_ref):
-            def _check(row):
-                has_stall = any(str(row.get(s, "")).strip() == "STALL"
-                                for s in STAGES if s in df_ref.columns)
-                ex_empty = str(row.get("EX", "")).strip() == ""
-                mem_full = str(row.get("MEM", "")).strip() not in ("", "STALL")
-                id_full  = str(row.get("ID",  "")).strip() not in ("", "STALL")
-                return has_stall or (ex_empty and mem_full and id_full)
+            def _check(row, prev_row=None):
+                if any(str(row.get(s,"")).strip() == "STALL"
+                       for s in STAGES if s in df_ref.columns):
+                    return True
+                if prev_row is not None:
+                    id_curr = str(row.get("ID","")).strip()
+                    id_prev = str(prev_row.get("ID","")).strip()
+                    if id_curr and id_curr not in ("","STALL") and id_curr == id_prev:
+                        return True
+                return False
             return _check
 
         col_a, col_b = st.columns(2)
