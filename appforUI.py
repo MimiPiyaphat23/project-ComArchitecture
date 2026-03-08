@@ -415,8 +415,20 @@ if run:
     except Exception as e:
         # แสดงแค่ error message — ไม่แสดง traceback
         # แปลง error string ให้ plain text (ไม่มี monospace แปลกๆ)
-        err_msg = str(e).replace("`", "").replace("<code>", "").replace("</code>", "")
-        st.error(f"⚠️ Simulation Error: {err_msg}")
+        import re, html
+        # escape ทุก character ที่ Streamlit/Markdown อาจตีความผิด
+        err_lines = str(e).split("\n")
+        err_html_lines = []
+        for line in err_lines:
+            clean = re.sub(r"[`]", "", line)
+            err_html_lines.append(html.escape(clean))
+        err_body = "<br>".join(err_html_lines)
+        st.markdown(f"""
+        <div style="background:#fde8e8;border:1px solid #f5c6c6;border-radius:8px;
+                    padding:14px 18px;font-family:'Inter',sans-serif;font-size:14px;color:#c0392b;
+                    line-height:1.7;">
+            ⚠️ <strong>Simulation Error:</strong><br>{err_body}
+        </div>""", unsafe_allow_html=True)
         # ล้าง simulation เก่าออกเพื่อไม่ให้ animation ค้าง
         st.session_state.sim_ready = False
 
