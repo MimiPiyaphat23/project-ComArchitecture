@@ -595,7 +595,8 @@ with right:
             ⚙️ Settings
         </div>
     </div>""", unsafe_allow_html=True)
-    enable_forwarding = st.checkbox("Enable Data Forwarding", value=True)
+    enable_forwarding  = st.checkbox("Enable Data Forwarding", value=True)
+    enable_hazard      = st.checkbox("Enable Hazard Detection", value=True)
     anim_speed = st.slider("Animation Speed (sec/cycle)", 0.1, 1.5, 0.4, 0.1)
     mode = st.radio("Run Mode", ["▶ Auto Run", "⏯ Step-by-step"], horizontal=True)
     st.markdown("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
@@ -614,16 +615,30 @@ if run:
         tl_on  = p_on.run()
         tl_off = p_off.run()
 
+        # สร้าง timeline แบบไม่มี hazard detection (instruction ไหลตรงไม่มี stall)
+        stages = ["IF","ID","EX","MEM","WB"]
+        n_instr = len(instructions)
+        n_cycles = n_instr + len(stages) - 1
+        tl_no_hazard = []
+        raw_strs_tmp = [i.raw if hasattr(i,"raw") else str(i) for i in instructions]
+        for c in range(1, n_cycles + 1):
+            row = {"Cycle": c}
+            for s_idx, s in enumerate(stages):
+                i_idx = c - 1 - s_idx
+                row[s] = raw_strs_tmp[i_idx] if 0 <= i_idx < n_instr else ""
+            tl_no_hazard.append(row)
+
         if not tl_on:
             st.error("❌ Simulation ผลิตข้อมูลว่างเปล่า")
         else:
-            st.session_state.sim_ready    = True
-            st.session_state.timeline_on  = tl_on
-            st.session_state.timeline_off = tl_off
-            st.session_state.instructions = instructions
-            st.session_state.step_cycle   = 1
+            st.session_state.sim_ready      = True
+            st.session_state.timeline_on    = tl_on
+            st.session_state.timeline_off   = tl_off
+            st.session_state.tl_no_hazard   = tl_no_hazard
+            st.session_state.instructions   = instructions
+            st.session_state.step_cycle     = 1
             # เก็บ register state หลัง simulate เสร็จ
-            st.session_state.registers    = list(p_on.registers)
+            st.session_state.registers      = list(p_on.registers)
 
     except Exception as e:
         # แสดงแค่ error message — ไม่แสดง traceback
@@ -655,7 +670,14 @@ if st.session_state.get("sim_ready"):
     instructions = st.session_state.instructions
     registers    = st.session_state.get("registers", [0] * 32)
 
-    timeline = tl_on if enable_forwarding else tl_off
+    if not enable_hazard and st.session_state.get("tl_no_hazard"):
+        tl_nh_main = st.session_state.tl_no_hazard
+        df_nh_main = normalize_df(pd.DataFrame(tl_nh_main))
+        df_nh_main["Cycle"] = range(1, len(df_nh_main) + 1)
+        timeline_main = tl_nh_main
+    else:
+        timeline_main = tl_on if enable_forwarding else tl_off
+    timeline = timeline_main
     df_tl  = normalize_df(pd.DataFrame(timeline))
     df_on  = normalize_df(pd.DataFrame(tl_on))
     df_off = normalize_df(pd.DataFrame(tl_off))
@@ -688,11 +710,12 @@ if st.session_state.get("sim_ready"):
     with tab1:
         st.subheader("🎬 Pipeline Animation")
 
-        # Hazard summary box — อยู่เหนือ animation เสมอ
+        # Hazard summary box + Explanation toggle
+        import html as _html
         if hazard_pairs and instr_list:
+            # ── Hazard summary ──
             rows = ""
             for (i, j), label in hazard_pairs.items():
-                import html as _html
                 i1 = _html.escape(instr_list[i])
                 i2 = _html.escape(instr_list[j])
                 rows += (
@@ -703,12 +726,23 @@ if st.session_state.get("sim_ready"):
                     f"border-radius:10px;font-size:12px;font-weight:600;'>{label}</span>"
                     f"</div>"
                 )
+
             st.markdown(
-                f"""<div style='background:#fffbea;border:1px solid #f0c040;border-radius:8px;
-                    padding:12px 16px;margin-bottom:12px;'>
-                    <div style='font-weight:700;font-size:14px;margin-bottom:8px;color:#7d5a00;'>
-                        ⚠️ RAW Hazards ที่ตรวจพบ</div>
-                    {rows}
+                    f"""<div style='background:#fffbea;border:1px solid #f0c040;border-radius:8px;
+                        padding:12px 16px;margin-bottom:4px;'>
+                        <div style='font-weight:700;font-size:14px;margin-bottom:8px;color:#7d5a00;'>
+                            ⚠️ RAW Hazards ที่ตรวจพบ</div>
+                        {rows}
+                    </div>""",
+                    unsafe_allow_html=True
+                )
+
+
+        elif not hazard_pairs and instr_list:
+            st.markdown(
+                """<div style='background:#f0fdf4;border:1px solid #86efac;border-radius:8px;
+                    padding:10px 16px;margin-bottom:12px;font-size:13px;color:#166534;'>
+                    ✅ ไม่พบ RAW Hazard — instruction ชุดนี้ทำงานได้อย่างราบรื่น
                 </div>""",
                 unsafe_allow_html=True
             )
@@ -755,6 +789,57 @@ if st.session_state.get("sim_ready"):
                 time.sleep(anim_speed)
             progress_bar.empty()
             st.success("✅ Simulation Complete!")
+
+        # ── Comparison panel เมื่อ enable_hazard เปลี่ยน ──────
+        if st.session_state.get("tl_no_hazard"):
+            tl_nh = st.session_state.tl_no_hazard
+            df_nh = normalize_df(pd.DataFrame(tl_nh))
+            df_nh["Cycle"] = range(1, len(df_nh) + 1)
+            il_nh  = extract_instr_list(df_nh)
+            max_nh = len(df_nh)
+
+            if not enable_hazard:
+                # ไม่มี hazard → แสดง "with hazard" เปรียบเทียบด้านล่าง
+                df_real = normalize_df(pd.DataFrame(tl_on if enable_forwarding else tl_off))
+                df_real["Cycle"] = range(1, len(df_real) + 1)
+                il_real = extract_instr_list(df_real)
+                cyc_real = len(df_real)
+                cyc_nh   = max_nh
+                diff = cyc_real - cyc_nh
+                sign = "+" if diff < 0 else "-"
+                bc   = "#dcfce7;color:#166534" if diff >= 0 else "#fde8e8;color:#dc2626"
+
+                st.markdown(
+                    "<div style='border-top:2px dashed #6366f1;margin:20px 0 14px 0;'></div>"
+                    "<div style='font-size:15px;font-weight:800;color:#4338ca;margin-bottom:8px;'>"
+                    "✅ With Hazard Detection (เปรียบเทียบ)</div>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    build_animation_html(df_real, il_real, len(df_real), len(df_real), hazard_pairs),
+                    unsafe_allow_html=True
+                )
+                st.markdown(f"""
+                <div style='display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;'>
+                  <div style='background:#fef3c7;border-radius:10px;padding:10px 18px;
+                              font-size:13px;font-weight:700;color:#92400e;'>
+                    🚫 Without Hazard Detection: <span style='font-size:18px;'>{cyc_nh}</span> cycles
+                  </div>
+                  <div style='background:#e0e7ff;border-radius:10px;padding:10px 18px;
+                              font-size:13px;font-weight:700;color:#3730a3;'>
+                    ✅ With Hazard Detection: <span style='font-size:18px;'>{cyc_real}</span> cycles
+                    <span style='background:{bc};font-size:11px;padding:2px 7px;
+                                 border-radius:8px;margin-left:6px;'>
+                      {sign}{abs(diff)} cycles
+                    </span>
+                  </div>
+                </div>
+                <div style='margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;
+                            border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92400e;'>
+                  ⚠️ pipeline ที่ไม่มี hazard detection จะใช้ค่า register เก่าที่ยังไม่ได้อัปเดต
+                  ทำให้ผลลัพธ์ผิดพลาด แม้จะใช้ cycle น้อยกว่า
+                </div>
+                """, unsafe_allow_html=True)
 
     # ── TAB 2: TIMELINE + STALL ────────────────────────────
     with tab2:
