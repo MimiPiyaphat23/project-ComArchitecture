@@ -59,14 +59,12 @@ label, .stCheckbox label p, .stRadio label p {
 .stAlert {
     border-radius: 8px !important;
 }
-/* ป้องกัน expander label overflow */
-.streamlit-expanderHeader {
+/* expander styling */
+.streamlit-expanderHeader, [data-testid="stExpander"] summary {
     font-family: 'Inter', sans-serif !important;
     font-weight: 600 !important;
     font-size: 14px !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal !important;
 }
 /* ลบ monospace จาก error box */
 .stAlert p, .stAlert div {
@@ -85,89 +83,167 @@ label, .stCheckbox label p, .stRadio label p {
 # ── Global font & UI styling ──────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-html, body, [class*="css"], .stApp {
+/* ── Base ── */
+html, body, [class*="css"], .stApp, p, div, span, li {
     font-family: 'Inter', sans-serif !important;
 }
-
-/* Header */
+.stApp {
+    background: #f7f8fc !important;
+}
 h1, h2, h3, h4 {
     font-family: 'Inter', sans-serif !important;
     font-weight: 700 !important;
-    letter-spacing: -0.3px;
+    letter-spacing: -0.4px;
+    color: #1a1a2e;
 }
 
-/* Subheader */
-.stSubheader {
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 600 !important;
-}
-
-/* Labels (checkbox, slider, radio) */
-label, .stCheckbox label p, .stRadio label p, .stSlider label {
-    font-family: 'Inter', sans-serif !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    color: #374151 !important;
-}
-
-/* Buttons */
-.stButton > button {
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 14px !important;
-    border-radius: 8px !important;
-    padding: 8px 20px !important;
-    transition: all 0.15s ease !important;
-}
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-}
-
-/* Text area */
-.stTextArea textarea {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-    font-size: 14px !important;
-    line-height: 1.6 !important;
-    border-radius: 8px !important;
-}
-
-/* Tabs */
-.stTabs [data-baseweb="tab"] {
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 14px !important;
-}
-
-/* Metric */
-[data-testid="stMetricLabel"] {
+/* ── Labels ── */
+label, .stCheckbox label p, .stRadio label p, .stSlider label p {
     font-family: 'Inter', sans-serif !important;
     font-size: 13px !important;
     font-weight: 500 !important;
-    color: #6B7280 !important;
-}
-[data-testid="stMetricValue"] {
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 700 !important;
+    color: #4B5563 !important;
 }
 
-/* Dataframe */
-.stDataFrame {
+/* ── Primary button → indigo ── */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+    border: none !important;
+    color: white !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    padding: 10px 24px !important;
+    box-shadow: 0 4px 14px rgba(99,102,241,0.35) !important;
+    transition: all 0.2s ease !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 20px rgba(99,102,241,0.45) !important;
+}
+
+/* ── Secondary buttons ── */
+.stButton > button:not([kind="primary"]) {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
     border-radius: 8px !important;
+    border: 1.5px solid #e0e7ff !important;
+    color: #4338ca !important;
+    background: white !important;
+    transition: all 0.15s ease !important;
+}
+.stButton > button:not([kind="primary"]):hover {
+    background: #eef2ff !important;
+    border-color: #6366f1 !important;
+}
+
+/* ── Text area ── */
+.stTextArea textarea {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    font-size: 13.5px !important;
+    line-height: 1.75 !important;
+    border-radius: 10px !important;
+    border: 1.5px solid #e5e7eb !important;
+    background: #ffffff !important;
+    color: #1f2937 !important;
+    padding: 12px !important;
+}
+.stTextArea textarea:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important;
+}
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 6px !important;
+    background: #eef2ff !important;
+    padding: 6px !important;
+    border-radius: 14px !important;
+    border: 1.5px solid #e0e7ff !important;
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    border-radius: 9px !important;
+    color: #818cf8 !important;
+    padding: 7px 18px !important;
+    border: none !important;
+    background: transparent !important;
+    transition: all 0.18s ease !important;
+    white-space: nowrap !important;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    background: #e0e7ff !important;
+    color: #4338ca !important;
+}
+.stTabs [aria-selected="true"] {
+    background: white !important;
+    color: #4338ca !important;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.18) !important;
+    border: 1px solid #e0e7ff !important;
+}
+/* ซ่อน underline เดิมของ Streamlit */
+.stTabs [data-baseweb="tab-highlight"] {
+    display: none !important;
+}
+.stTabs [data-baseweb="tab-border"] {
+    display: none !important;
+}
+
+/* ── Metric ── */
+[data-testid="stMetricLabel"] {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #6B7280 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+[data-testid="stMetricValue"] {
+    font-weight: 800 !important;
+    font-size: 2rem !important;
+    color: #1a1a2e !important;
+}
+
+/* ── Dataframe ── */
+.stDataFrame {
+    border-radius: 10px !important;
+    border: 1px solid #e5e7eb !important;
     overflow: hidden !important;
 }
 
-/* Info/error/success boxes */
+/* ── Alert boxes ── */
 .stAlert {
-    border-radius: 8px !important;
+    border-radius: 10px !important;
+    font-size: 13.5px !important;
+}
+.stAlert code {
     font-family: 'Inter', sans-serif !important;
+    font-size: 13.5px !important;
+    background: transparent !important;
+    padding: 0 !important;
 }
 
-/* Caption */
-.stCaption {
+/* ── Divider ── */
+hr {
+    border-color: #e5e7eb !important;
+    margin: 16px 0 !important;
+}
+
+/* ── expander styling ── */
+.streamlit-expanderHeader, [data-testid="stExpander"] summary {
     font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    white-space: normal !important;
+}
+
+/* ── Caption ── */
+.stCaption, small {
     font-size: 12px !important;
     color: #9CA3AF !important;
 }
@@ -355,14 +431,28 @@ def generate_report(instructions, metrics_on, metrics_off, stalls_on, stalls_off
 # HEADER
 # ─────────────────────────────────────────────
 st.markdown("""
-<div style="text-align:center; padding: 24px 0 8px 0;">
-    <span style="font-size:48px;">🚀</span>
-    <h1 style="font-family:'Inter',sans-serif; font-weight:800; font-size:2.4rem;
-               color:#111827; margin:8px 0 4px 0; letter-spacing:-0.5px;">
-        5-Stage RISC Pipeline Simulator
-    </h1>
-    <p style="font-family:'Inter',sans-serif; color:#6B7280; font-size:15px; margin:0;">
-        Visualize, analyze, and compare pipeline execution cycle-by-cycle
+<div style="text-align:center;padding:40px 0 28px 0;">
+    <div style="display:inline-block;background:linear-gradient(135deg,#eef2ff,#e0e7ff);
+                border:1px solid #c7d2fe;border-radius:20px;padding:5px 16px;
+                font-size:12px;font-weight:700;color:#6366f1;letter-spacing:1px;
+                text-transform:uppercase;margin-bottom:18px;">
+        Computer Architecture Project
+    </div>
+    <div style="margin-bottom:14px;">
+        <span style="font-size:52px;line-height:1;display:block;margin-bottom:12px;">🚀</span>
+        <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:2.6rem;
+                     letter-spacing:-1.5px;
+                     background:linear-gradient(135deg,#4338ca 0%,#7c3aed 50%,#6366f1 100%);
+                     -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                     background-clip:text;line-height:1.1;display:block;">
+            5-Stage RISC Pipeline Simulator
+        </span>
+    </div>
+    <div style="height:4px;width:80px;background:linear-gradient(90deg,#6366f1,#a855f7,#8b5cf6);
+                border-radius:2px;margin:0 auto 16px;"></div>
+    <p style="font-family:'Inter',sans-serif;color:#9ca3af;font-size:14px;
+              margin:0;letter-spacing:0.8px;">
+        Visualize &nbsp;&middot;&nbsp; Analyze &nbsp;&middot;&nbsp; Compare pipeline execution cycle-by-cycle
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -371,22 +461,33 @@ st.divider()
 # ─────────────────────────────────────────────
 # INPUT AREA
 # ─────────────────────────────────────────────
-left, right = st.columns([2, 1])
+left, right = st.columns([3, 2])
 with left:
+    st.markdown("""
+    <div style="font-family:'Inter',sans-serif;font-weight:600;font-size:13px;
+                color:#6366f1;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">
+        📝 Instructions
+    </div>""", unsafe_allow_html=True)
     default_program = "ADD $s0, $t1, $t2\nSUB $s1, $s0, $t0\nLW $t2, 0($s1)\nSW $t2, 4($s0)"
-    instruction_text = st.text_area("📝 Instructions", default_program, height=180)
+    instruction_text = st.text_area("", default_program, height=200,
+                                    placeholder="Enter RISC instructions, one per line...",
+                                    label_visibility="collapsed")
 
 with right:
     st.markdown("""
-    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:20px 22px 16px;">
-        <div style="font-family:'Inter',sans-serif;font-weight:700;font-size:16px;
-                    color:#111827;margin-bottom:16px;">⚙️ Settings</div>
-    </div>
-    """, unsafe_allow_html=True)
-    enable_forwarding = st.checkbox("Enable Forwarding", value=True)
+    <div style="background:linear-gradient(135deg,#f8faff 0%,#f0f4ff 100%);
+                border:1px solid #e0e7ff;border-radius:14px;padding:20px 22px 6px;
+                box-shadow:0 2px 8px rgba(99,102,241,0.06);">
+        <div style="font-family:'Inter',sans-serif;font-weight:700;font-size:15px;
+                    color:#4338ca;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            ⚙️ Settings
+        </div>
+    </div>""", unsafe_allow_html=True)
+    enable_forwarding = st.checkbox("Enable Data Forwarding", value=True)
     anim_speed = st.slider("Animation Speed (sec/cycle)", 0.1, 1.5, 0.4, 0.1)
-    mode = st.radio("Mode", ["▶ Auto Run", "⏯ Step-by-step"], horizontal=True)
-    run = st.button("▶ Run Simulation", use_container_width=True, type="primary")
+    mode = st.radio("Run Mode", ["▶ Auto Run", "⏯ Step-by-step"], horizontal=True)
+    st.markdown("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
+    run = st.button("▶  Run Simulation", use_container_width=True, type="primary")
 
 st.divider()
 
@@ -459,12 +560,41 @@ if st.session_state.get("sim_ready"):
     hazard_pairs = detect_hazards(raw_strs if raw_strs[0] != instructions[0] else instr_list)
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🎬 Animation", "📊 Timeline", "⚖️ Comparison", "🗂 Registers", "📄 Report"
+        "🎬  Animation",
+        "📊  Timeline",
+        "⚖️  Comparison",
+        "🗂  Registers",
+        "📄  Report",
     ])
 
     # ── TAB 1: ANIMATION ──────────────────────────────────
     with tab1:
         st.subheader("🎬 Pipeline Animation")
+
+        # Hazard summary box — อยู่เหนือ animation เสมอ
+        if hazard_pairs and instr_list:
+            rows = ""
+            for (i, j), label in hazard_pairs.items():
+                import html as _html
+                i1 = _html.escape(instr_list[i])
+                i2 = _html.escape(instr_list[j])
+                rows += (
+                    f"<div style='margin:4px 0;font-size:13px;'>"
+                    f"▸ Instr <b>{i+1}</b> <code>{i1}</code> → "
+                    f"Instr <b>{j+1}</b> <code>{i2}</code> "
+                    f"<span style='background:#fff3cd;color:#856404;padding:1px 7px;"
+                    f"border-radius:10px;font-size:12px;font-weight:600;'>{label}</span>"
+                    f"</div>"
+                )
+            st.markdown(
+                f"""<div style='background:#fffbea;border:1px solid #f0c040;border-radius:8px;
+                    padding:12px 16px;margin-bottom:12px;'>
+                    <div style='font-weight:700;font-size:14px;margin-bottom:8px;color:#7d5a00;'>
+                        ⚠️ RAW Hazards ที่ตรวจพบ</div>
+                    {rows}
+                </div>""",
+                unsafe_allow_html=True
+            )
 
         if not instr_list:
             st.warning("⚠️ ไม่พบ instruction list")
@@ -508,16 +638,6 @@ if st.session_state.get("sim_ready"):
                 time.sleep(anim_speed)
             progress_bar.empty()
             st.success("✅ Simulation Complete!")
-
-        # Hazard summary — แสดงหลัง animation (ทั้ง 2 mode)
-        if hazard_pairs and instr_list:
-            st.markdown("---")
-            st.markdown("**⚠️ RAW Hazards ที่ตรวจพบ:**")
-            for (i, j), label in hazard_pairs.items():
-                st.markdown(
-                    f"\u00a0\u00a0• Instruction **{i+1}** `{instr_list[i]}` → "
-                    f"Instruction **{j+1}** `{instr_list[j]}` : **{label}**"
-                )
 
     # ── TAB 2: TIMELINE + STALL ────────────────────────────
     with tab2:
