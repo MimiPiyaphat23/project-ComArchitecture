@@ -713,27 +713,76 @@ if st.session_state.get("sim_ready"):
     with tab2:
         st.subheader("📊 Timeline Table")
 
-        # Hazard highlight ใน dataframe
-        def highlight_hazard(data):
-            style = pd.DataFrame("", index=data.index, columns=data.columns)
-            for idx, row in data.iterrows():
-                has_stall = any(str(row.get(s, "")).strip() == "STALL"
-                                for s in STAGES if s in data.columns)
-                ex_empty  = str(row.get("EX",  "")).strip() == ""
-                mem_full  = str(row.get("MEM", "")).strip() not in ("", "STALL")
-                id_full   = str(row.get("ID",  "")).strip() not in ("", "STALL")
-                if has_stall or (ex_empty and mem_full and id_full):
-                    style.loc[idx] = "background-color: #ffe0e0"
-            return style
+        import html as _html
 
-        styled_df = df_tl.fillna("").style.apply(highlight_hazard, axis=None)
-        st.dataframe(styled_df, use_container_width=True)
+        def is_stall_row(row):
+            has_stall = any(str(row.get(s, "")).strip() == "STALL"
+                            for s in STAGES if s in df_tl.columns)
+            ex_empty  = str(row.get("EX",  "")).strip() == ""
+            mem_full  = str(row.get("MEM", "")).strip() not in ("", "STALL")
+            id_full   = str(row.get("ID",  "")).strip() not in ("", "STALL")
+            return has_stall or (ex_empty and mem_full and id_full)
+
+        # Filter controls
+        fcol1, fcol2, fcol3 = st.columns([2, 1, 1])
+        with fcol1:
+            search_val = st.text_input("🔍 ค้นหา instruction", placeholder="เช่น ADD, LW, $s0 ...",
+                                       label_visibility="collapsed", key="tl_search")
+        with fcol2:
+            filter_stall = st.checkbox("แสดงเฉพาะแถว STALL", key="tl_stall")
+        with fcol3:
+            filter_cycle = st.number_input("ดู Cycle ที่", min_value=0, max_value=int(df_tl["Cycle"].max()),
+                                           value=0, step=1, key="tl_cycle",
+                                           help="0 = แสดงทั้งหมด")
+
+        # Apply filters
+        df_view = df_tl.fillna("").copy()
+        if search_val.strip():
+            mask = df_view.apply(
+                lambda row: any(search_val.lower() in str(v).lower() for v in row), axis=1
+            )
+            df_view = df_view[mask]
+        if filter_stall:
+            df_view = df_view[df_view.apply(is_stall_row, axis=1)]
+        if filter_cycle > 0:
+            df_view = df_view[df_view["Cycle"] == filter_cycle]
+
+        # build HTML table
+        cols = list(df_view.columns)
+        th_style = ("background:#4338ca;color:white;font-weight:700;font-size:13px;"
+                    "padding:10px 14px;text-align:left;white-space:nowrap;")
+        th_html = "".join(f'<th style="{th_style}">{c}</th>' for c in cols)
+        rows_html = ""
+        for _, row in df_view.iterrows():
+            stall = is_stall_row(row)
+            bg = "#fde8e8" if stall else "white"
+            tr = ""
+            for c in cols:
+                val = str(row.get(c, ""))
+                td = (f'<td style="padding:9px 14px;font-size:13px;border-bottom:1px solid #f0f0f0;'
+                      f'background:{bg};font-family:monospace;color:#1f2937;">'
+                      f'{_html.escape(val)}</td>')
+                tr += td
+            rows_html += f'<tr>{tr}</tr>'
+
+        if not rows_html:
+            rows_html = f'<tr><td colspan="{len(cols)}" style="text-align:center;padding:20px;color:#9ca3af;">ไม่พบข้อมูลที่ตรงกัน</td></tr>'
+
+        table_html = f"""
+        <div style="overflow-x:auto;border-radius:12px;border:1px solid #e5e7eb;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:8px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>{th_html}</tr></thead>
+            <tbody>{rows_html}</tbody>
+          </table>
+        </div>"""
+        st.markdown(table_html, unsafe_allow_html=True)
         st.caption("🔴 แถวสีแดง = cycle ที่มี STALL เกิดขึ้น")
 
         st.subheader("🔴 Stall Details")
         details = details_on if enable_forwarding else details_off
         if details:
-            st.dataframe(pd.DataFrame(details), use_container_width=True)
+            st.dataframe(pd.DataFrame(details), use_container_width=True, hide_index=True)
         else:
             st.success("✅ ไม่มี Stall เกิดขึ้น")
 
