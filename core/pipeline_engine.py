@@ -213,9 +213,7 @@ class Pipeline:
 
 
                 elif instr.opcode == "JR":
-
-                    pc = self.registers[instr.rs]
-
+                    pc = rs_val
                     IF = None
                     ID = None
                 
