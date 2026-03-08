@@ -861,15 +861,54 @@ if st.session_state.get("sim_ready"):
 
         st.divider()
 
-        # ── Timeline คู่กัน high fixed ──
+        # ── Timeline คู่กัน ──
         st.markdown("#### 📋 Timeline Detail")
+
+        import html as _html2
+
+        def make_timeline_html(df, stall_fn):
+            cols = list(df.columns)
+            th_style = ("background:#4338ca;color:white;font-weight:700;font-size:12px;"
+                        "padding:8px 12px;text-align:left;white-space:nowrap;")
+            th_html = "".join(f'<th style="{th_style}">{c}</th>' for c in cols)
+            rows_html = ""
+            for _, row in df.fillna("").iterrows():
+                stall = stall_fn(row)
+                bg = "#fde8e8" if stall else "white"
+                tr = ""
+                for c in cols:
+                    val = str(row.get(c, ""))
+                    tr += (f'<td style="padding:7px 12px;font-size:12px;'
+                           f'border-bottom:1px solid #f0f0f0;background:{bg};'
+                           f'font-family:monospace;color:#1f2937;">'
+                           f'{_html2.escape(val)}</td>')
+                rows_html += f'<tr>{tr}</tr>'
+            return f"""<div style="overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb;
+                    box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr>{th_html}</tr></thead>
+                <tbody>{rows_html}</tbody>
+              </table></div>"""
+
+        def is_stall_row_gen(df_ref):
+            def _check(row):
+                has_stall = any(str(row.get(s, "")).strip() == "STALL"
+                                for s in STAGES if s in df_ref.columns)
+                ex_empty = str(row.get("EX", "")).strip() == ""
+                mem_full = str(row.get("MEM", "")).strip() not in ("", "STALL")
+                id_full  = str(row.get("ID",  "")).strip() not in ("", "STALL")
+                return has_stall or (ex_empty and mem_full and id_full)
+            return _check
+
         col_a, col_b = st.columns(2)
         with col_a:
             st.markdown("**✅ With Forwarding**")
-            st.dataframe(df_on.fillna(""), use_container_width=True, height=300)
+            st.markdown(make_timeline_html(df_on, is_stall_row_gen(df_on)),
+                        unsafe_allow_html=True)
         with col_b:
             st.markdown("**❌ Without Forwarding**")
-            st.dataframe(df_off.fillna(""), use_container_width=True, height=300)
+            st.markdown(make_timeline_html(df_off, is_stall_row_gen(df_off)),
+                        unsafe_allow_html=True)
 
         saved = stalls_off - stalls_on
         if saved > 0:
