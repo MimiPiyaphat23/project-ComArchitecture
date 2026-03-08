@@ -236,8 +236,10 @@ if run:
             st.session_state.registers    = list(p_on.registers)
 
     except Exception as e:
+        # แสดงแค่ error message — ไม่แสดง traceback
         st.error(f"⚠️ Simulation Error: {e}")
-        st.exception(e)
+        # ล้าง simulation เก่าออกเพื่อไม่ให้ animation ค้าง
+        st.session_state.sim_ready = False
 
 # ─────────────────────────────────────────────
 # DISPLAY
