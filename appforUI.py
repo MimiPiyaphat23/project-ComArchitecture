@@ -286,6 +286,13 @@ def normalize_df(df):
         df = df.rename(columns={"cycle": "Cycle"})
     if "Cycle" not in df.columns:
         df["Cycle"] = range(1, len(df) + 1)
+    # กรอง cycle ที่ทุก stage ว่างออก (trailing empty cycles)
+    stage_cols = [s for s in ["IF","ID","EX","MEM","WB"] if s in df.columns]
+    if stage_cols:
+        has_data = df[stage_cols].apply(
+            lambda row: any(str(v).strip() not in ("", "STALL") for v in row), axis=1
+        )
+        df = df[has_data].reset_index(drop=True)
     return df
 
 def count_stalls(df):
@@ -608,7 +615,11 @@ if st.session_state.get("sim_ready"):
     df_off = normalize_df(pd.DataFrame(tl_off))
 
     instr_list  = extract_instr_list(df_tl)
-    max_c       = int(df_tl["Cycle"].max())
+    # reindex Cycle ให้เริ่มจาก 1 ต่อเนื่อง หลัง filter แล้ว
+    df_tl["Cycle"]  = range(1, len(df_tl)  + 1)
+    df_on["Cycle"]  = range(1, len(df_on)  + 1)
+    df_off["Cycle"] = range(1, len(df_off) + 1)
+    max_c           = len(df_tl)
     metrics_on  = calculate_metrics(tl_on)
     metrics_off = calculate_metrics(tl_off)
     stalls_on,  details_on  = count_stalls(df_on)
