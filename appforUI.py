@@ -12,6 +12,168 @@ except ImportError as e:
 
 st.set_page_config(page_title="RISC Pipeline Simulator", layout="wide", page_icon="🚀")
 
+# ── Global font & UI styling ──────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="css"], .stApp, p, div, span {
+    font-family: 'Inter', sans-serif !important;
+}
+h1, h2, h3, h4 {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.3px;
+}
+label, .stCheckbox label p, .stRadio label p {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #374151 !important;
+}
+.stButton > button {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    border-radius: 8px !important;
+}
+.stTextArea textarea {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.7 !important;
+    border-radius: 8px !important;
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: #6B7280 !important;
+}
+[data-testid="stMetricValue"] {
+    font-weight: 700 !important;
+}
+.stAlert {
+    border-radius: 8px !important;
+}
+/* ป้องกัน expander label overflow */
+.streamlit-expanderHeader {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* ลบ monospace จาก error box */
+.stAlert p, .stAlert div {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+}
+.stAlert code {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ── Global font & UI styling ──────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"], .stApp {
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* Header */
+h1, h2, h3, h4 {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.3px;
+}
+
+/* Subheader */
+.stSubheader {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+}
+
+/* Labels (checkbox, slider, radio) */
+label, .stCheckbox label p, .stRadio label p, .stSlider label {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #374151 !important;
+}
+
+/* Buttons */
+.stButton > button {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    border-radius: 8px !important;
+    padding: 8px 20px !important;
+    transition: all 0.15s ease !important;
+}
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+/* Text area */
+.stTextArea textarea {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    border-radius: 8px !important;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab"] {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+}
+
+/* Metric */
+[data-testid="stMetricLabel"] {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: #6B7280 !important;
+}
+[data-testid="stMetricValue"] {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+}
+
+/* Dataframe */
+.stDataFrame {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+/* Info/error/success boxes */
+.stAlert {
+    border-radius: 8px !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* Caption */
+.stCaption {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 12px !important;
+    color: #9CA3AF !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
@@ -192,8 +354,18 @@ def generate_report(instructions, metrics_on, metrics_off, stalls_on, stalls_off
 # ─────────────────────────────────────────────
 # HEADER
 # ─────────────────────────────────────────────
-st.markdown("<h1 style='text-align:center;'>🚀 5-Stage RISC Pipeline Simulator</h1>",
-            unsafe_allow_html=True)
+st.markdown("""
+<div style="text-align:center; padding: 24px 0 8px 0;">
+    <span style="font-size:48px;">🚀</span>
+    <h1 style="font-family:'Inter',sans-serif; font-weight:800; font-size:2.4rem;
+               color:#111827; margin:8px 0 4px 0; letter-spacing:-0.5px;">
+        5-Stage RISC Pipeline Simulator
+    </h1>
+    <p style="font-family:'Inter',sans-serif; color:#6B7280; font-size:15px; margin:0;">
+        Visualize, analyze, and compare pipeline execution cycle-by-cycle
+    </p>
+</div>
+""", unsafe_allow_html=True)
 st.divider()
 
 # ─────────────────────────────────────────────
@@ -205,11 +377,16 @@ with left:
     instruction_text = st.text_area("📝 Instructions", default_program, height=180)
 
 with right:
-    st.markdown("### ⚙️ Settings")
+    st.markdown("""
+    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:20px 22px 16px;">
+        <div style="font-family:'Inter',sans-serif;font-weight:700;font-size:16px;
+                    color:#111827;margin-bottom:16px;">⚙️ Settings</div>
+    </div>
+    """, unsafe_allow_html=True)
     enable_forwarding = st.checkbox("Enable Forwarding", value=True)
     anim_speed = st.slider("Animation Speed (sec/cycle)", 0.1, 1.5, 0.4, 0.1)
     mode = st.radio("Mode", ["▶ Auto Run", "⏯ Step-by-step"], horizontal=True)
-    run = st.button("▶ Run Simulation", use_container_width=True)
+    run = st.button("▶ Run Simulation", use_container_width=True, type="primary")
 
 st.divider()
 
@@ -237,7 +414,9 @@ if run:
 
     except Exception as e:
         # แสดงแค่ error message — ไม่แสดง traceback
-        st.error(f"⚠️ Simulation Error: {e}")
+        # แปลง error string ให้ plain text (ไม่มี monospace แปลกๆ)
+        err_msg = str(e).replace("`", "").replace("<code>", "").replace("</code>", "")
+        st.error(f"⚠️ Simulation Error: {err_msg}")
         # ล้าง simulation เก่าออกเพื่อไม่ให้ animation ค้าง
         st.session_state.sim_ready = False
 
@@ -275,14 +454,6 @@ if st.session_state.get("sim_ready"):
     with tab1:
         st.subheader("🎬 Pipeline Animation")
 
-        if hazard_pairs:
-            with st.expander("⚠️ RAW Hazards ที่ตรวจพบ", expanded=False):
-                for (i, j), label in hazard_pairs.items():
-                    st.markdown(
-                        f"- Instruction **{i+1}** (`{instr_list[i]}`) → "
-                        f"Instruction **{j+1}** (`{instr_list[j]}`) : `{label}`"
-                    )
-
         if not instr_list:
             st.warning("⚠️ ไม่พบ instruction list")
             st.dataframe(df_tl, use_container_width=True)
@@ -312,6 +483,7 @@ if st.session_state.get("sim_ready"):
             st.caption(f"Cycle {current} / {max_c}")
 
         else:
+            # Auto Run
             anim_placeholder = st.empty()
             progress_bar     = st.progress(0)
             for current in range(1, max_c + 1):
@@ -324,6 +496,16 @@ if st.session_state.get("sim_ready"):
                 time.sleep(anim_speed)
             progress_bar.empty()
             st.success("✅ Simulation Complete!")
+
+        # Hazard summary — แสดงหลัง animation (ทั้ง 2 mode)
+        if hazard_pairs and instr_list:
+            st.markdown("---")
+            st.markdown("**⚠️ RAW Hazards ที่ตรวจพบ:**")
+            for (i, j), label in hazard_pairs.items():
+                st.markdown(
+                    f"\u00a0\u00a0• Instruction **{i+1}** `{instr_list[i]}` → "
+                    f"Instruction **{j+1}** `{instr_list[j]}` : **{label}**"
+                )
 
     # ── TAB 2: TIMELINE + STALL ────────────────────────────
     with tab2:
