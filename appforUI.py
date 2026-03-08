@@ -6,9 +6,42 @@ import io
 try:
     from core.parser import parse_instructions
     from core.pipeline_engine import Pipeline
-    from performance.metrics import calculate_metrics
+    from performance.metrics import calculate_metrics as _calc_metrics_orig
 except ImportError as e:
     st.error(f"❌ ไม่สามารถโหลด Core Logic ได้: {e}")
+
+def calculate_metrics(timeline):
+    """Fixed version — กรอง trailing empty rows ก่อนนับ cycle"""
+    if not timeline:
+        return {"cycles": 0, "cpi": 0, "instructions": 0, "stalls": 0}
+    stages = ["IF", "ID", "EX", "MEM", "WB"]
+
+    # กรอง rows ที่ทุก stage ว่างออก (trailing empty)
+    active = [r for r in timeline
+              if any(str(r.get(s,"")).strip() not in ("","STALL") for s in stages)]
+    total_cycles = len(active)
+
+    instructions_done = set()
+    stall_count = 0
+    for row in active:
+        wb = str(row.get("WB","")).strip()
+        if wb and wb != "STALL":
+            instructions_done.add(wb)
+        for s in stages:
+            if str(row.get(s,"")).strip() == "STALL":
+                stall_count += 1
+                break
+
+    n = len(instructions_done)
+    if n == 0:
+        for row in active:
+            v = str(row.get("IF","")).strip()
+            if v and v != "STALL":
+                instructions_done.add(v)
+        n = len(instructions_done)
+
+    cpi = round(total_cycles / n, 4) if n > 0 else 0
+    return {"cycles": total_cycles, "cpi": cpi, "instructions": n, "stalls": stall_count}
 
 st.set_page_config(page_title="RISC Pipeline Simulator", layout="wide", page_icon="🚀")
 
@@ -934,16 +967,35 @@ if st.session_state.get("sim_ready"):
 
         df_reg = pd.DataFrame(reg_data)
 
-        # ไฮไลต์ register ที่ไม่ใช่ 0 (มีการเขียน)
-        def highlight_nonzero(row):
-            return ["background-color: #e8f5e9" if row["Value (Dec)"] != 0 else ""
-                    for _ in row]
+        import html as _html3
+        cols_reg = list(df_reg.columns)
+        th_style = ("background:#4338ca;color:white;font-weight:700;font-size:13px;"
+                    "padding:10px 14px;text-align:left;white-space:nowrap;")
+        th_html = "".join(f'<th style="{th_style}">{c}</th>' for c in cols_reg)
+        rows_html = ""
+        for _, row in df_reg.iterrows():
+            nonzero = row["Value (Dec)"] != 0
+            bg = "#e8f5e9" if nonzero else "white"
+            fw = "700" if nonzero else "400"
+            tr = ""
+            for c in cols_reg:
+                val = str(row.get(c, ""))
+                mono = "font-family:monospace;" if c.startswith("Value") else ""
+                tr += (f'<td style="padding:9px 14px;font-size:13px;{mono}'
+                       f'border-bottom:1px solid #f0f0f0;background:{bg};'
+                       f'color:#1f2937;font-weight:{fw};">'
+                       f'{_html3.escape(val)}</td>')
+            rows_html += f'<tr>{tr}</tr>'
 
-        st.dataframe(
-            df_reg.style.apply(highlight_nonzero, axis=1),
-            use_container_width=True,
-            height=400,
-        )
+        reg_table_html = f"""
+        <div style="overflow-x:auto;border-radius:12px;border:1px solid #e5e7eb;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:8px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>{th_html}</tr></thead>
+            <tbody>{rows_html}</tbody>
+          </table>
+        </div>"""
+        st.markdown(reg_table_html, unsafe_allow_html=True)
         st.caption("🟢 สีเขียว = register ที่มีค่าไม่เป็น 0 (ถูกเขียนทับระหว่าง simulation)")
 
     # ── TAB 5: REPORT ─────────────────────────────────────
